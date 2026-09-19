@@ -23,6 +23,10 @@ export const CHART_COLORS = {
   secondary: '#faad14',
   tertiary: '#52c41a',
   quaternary: '#13c2c2',
+  /** 目標線（破線） */
+  target: '#fa8c16',
+  /** 前年など、control として薄く置く線 */
+  muted: '#bfbfbf',
 } as const;
 
 /** 商品分析の ABC ランク */

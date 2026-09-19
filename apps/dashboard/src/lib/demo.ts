@@ -30,6 +30,9 @@ import type {
   DishUpSlipGroup,
   InflowSource,
   KitchenPrinter,
+  DailyReport,
+  DailySalesTarget,
+  KpiTarget,
   LineReportingBotConfig,
   Menu,
   MenuRow,
@@ -38,11 +41,14 @@ import type {
   OptionDef,
   OptionRow,
   PaymentMethod,
+  PlAccount,
   PlanGroup,
+  PurchaseTransaction,
   RoleDefinition,
   Shop,
   ShopGroup,
   ShopMenu,
+  Vendor,
   TerminalPaymentMethod,
 } from './types';
 
@@ -86,6 +92,14 @@ export interface DemoState extends PlanState, TransactionState {
 
   // --- P2: 取引・本部機能（§5.22〜§5.28） ---
   lineReportingBotConfigs: LineReportingBotConfig[];
+
+  // --- P3: 分析・経営管理（§6.x） ---
+  plAccounts: PlAccount[];
+  vendors: Vendor[];
+  purchaseTransactions: PurchaseTransaction[];
+  kpiTargets: KpiTarget[];
+  dailySalesTargets: DailySalesTarget[];
+  dailyReports: DailyReport[];
 
   // --- P1 の残り（§5.7 / §5.9 / §5.11 / §5.14〜§5.19） ---
   recommendationSets: RecommendationSet[];
@@ -382,6 +396,10 @@ function createState(): DemoState {
     ...p1Rest,
     ...transactions,
     lineReportingBotConfigs: [],
+    ...buildBiSeeds(
+      CORP_ID,
+      shops.map((s) => s.id)
+    ),
     // 既定では全店舗が全品を扱う
     shopMenus: shops.flatMap((shop) =>
       master.menus
@@ -433,7 +451,7 @@ function createState(): DemoState {
 // HMR でモジュールが作り直されてもデータが消えないよう globalThis に置く。
 // ただし DemoState の形を変えたときは作り直したいので、版を添えて持つ。
 // （版を上げ忘れると、古い形のまま参照して実行時エラーになる）
-const STATE_VERSION = 10;
+const STATE_VERSION = 11;
 
 const g = globalThis as typeof globalThis & {
   __dashboardDemo?: { version: number; state: DemoState };
@@ -697,5 +715,83 @@ function buildP1Rest(shops: { id: string; company_id: string }[], companyIds: st
     })),
     areas,
     restaurantTables,
+  };
+}
+
+/** 経営管理（§6.x）のデモデータ。科目・取引先・目標・仕入れを少しだけ入れる */
+function buildBiSeeds(corporationId: string, shopIds: string[]) {
+  const plAccounts: PlAccount[] = [
+    { id: 'pl-1', corporation_id: corporationId, code: '4000', pl_section: 'sales', name: '売上高', sub_name: 'POS売上', cost_class: null, petty_cash_usable: false, is_visible: true, company_ids: [], note: null, display_order: 10 },
+    { id: 'pl-2', corporation_id: corporationId, code: '5100', pl_section: 'cogs', name: '仕入高', sub_name: 'フード', cost_class: 'variable', petty_cash_usable: true, is_visible: true, company_ids: [], note: null, display_order: 20 },
+    { id: 'pl-3', corporation_id: corporationId, code: '5110', pl_section: 'cogs', name: '仕入高', sub_name: 'ドリンク', cost_class: 'variable', petty_cash_usable: true, is_visible: true, company_ids: [], note: null, display_order: 30 },
+    { id: 'pl-4', corporation_id: corporationId, code: '6100', pl_section: 'labor', name: '人件費', sub_name: 'アルバイト', cost_class: 'variable', petty_cash_usable: false, is_visible: true, company_ids: [], note: null, display_order: 40 },
+    { id: 'pl-5', corporation_id: corporationId, code: '7100', pl_section: 'sga', name: '水道光熱費', sub_name: null, cost_class: 'fixed', petty_cash_usable: true, is_visible: true, company_ids: [], note: null, display_order: 50 },
+    { id: 'pl-6', corporation_id: corporationId, code: '7200', pl_section: 'sga', name: '家賃', sub_name: null, cost_class: 'fixed', petty_cash_usable: false, is_visible: true, company_ids: [], note: null, display_order: 60 },
+  ];
+
+  const vendors: Vendor[] = [
+    { id: 'vendor-1', corporation_id: corporationId, name: '丸product 青果', kind: '食材', note: null, display_order: 10 },
+    { id: 'vendor-2', corporation_id: corporationId, name: '山田酒店', kind: '酒類', note: null, display_order: 20 },
+    { id: 'vendor-3', corporation_id: corporationId, name: '東京ミート', kind: '精肉', note: null, display_order: 30 },
+  ];
+
+  // 直近 10 日ぶんの仕入れ
+  const purchaseTransactions: PurchaseTransaction[] = shopIds.flatMap((shopId, shopIndex) =>
+    Array.from({ length: 10 }).map((_, i) => {
+      const date = new Date('2026-09-19T00:00:00+09:00');
+      date.setDate(date.getDate() - i);
+      const isDrink = i % 3 === 0;
+      const unitPrice = isDrink ? 380 : 620;
+      const quantity = 5 + (i % 4) * 3;
+
+      return {
+        id: `${shopId}-pt-${i}`,
+        shop_id: shopId,
+        purchased_on: date.toISOString().slice(0, 10),
+        vendor_id: isDrink ? 'vendor-2' : shopIndex % 2 === 0 ? 'vendor-1' : 'vendor-3',
+        product_name: isDrink ? '生ビール樽' : '鶏もも肉',
+        spec: isDrink ? '19L' : '2kg',
+        product_type: isDrink ? ('drink' as const) : ('food' as const),
+        unit_price: unitPrice,
+        quantity,
+        amount: unitPrice * quantity,
+        source: 'manual' as const,
+        note: null,
+      };
+    })
+  );
+
+  // 当月の目標。デモの売上（1 店舗あたり月 150 万前後）に近い値を置く
+  const kpiTargets: KpiTarget[] = shopIds.map((shopId, index) => ({
+    id: `${shopId}-kpi`,
+    shop_id: shopId,
+    year_month: '2026-09',
+    sales_target: 1600000 + index * 100000,
+    food_cost_target: 380000,
+    drink_cost_target: 180000,
+    labor_target: 420000,
+    sga_target: 300000,
+    guest_target: 1100,
+    avg_spend_target: 1500,
+  }));
+
+  // 月間目標を日数で割って日別目標にしておく
+  const dailySalesTargets: DailySalesTarget[] = shopIds.flatMap((shopId) => {
+    const target = kpiTargets.find((t) => t.shop_id === shopId)?.sales_target ?? 0;
+    const perDay = Math.round(target / 30);
+    return Array.from({ length: 30 }).map((_, i) => ({
+      shop_id: shopId,
+      business_date: `2026-09-${String(i + 1).padStart(2, '0')}`,
+      amount: perDay,
+    }));
+  });
+
+  return {
+    plAccounts,
+    vendors,
+    purchaseTransactions,
+    kpiTargets,
+    dailySalesTargets,
+    dailyReports: [] as DailyReport[],
   };
 }

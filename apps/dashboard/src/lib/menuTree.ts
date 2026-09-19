@@ -137,7 +137,7 @@ export const BI_MENU: MenuGroup[] = [
     key: 'bi-dashboard',
     label: 'ダッシュボード',
     children: [
-      { key: 'fl', label: '店舗管理ダッシュボード', href: '/bi/flDashboard', feature: 'bi_integration', pending: true },
+      { key: 'fl', label: '店舗管理ダッシュボード', href: '/bi/flDashboard', feature: 'bi_integration' },
       { key: 'current', label: '売上速報', href: '/bi/current-sales', feature: 'analytics', pending: true },
       { key: 'daily-report', label: '日報', href: '/bi/dailySalesReport', feature: 'analytics', pending: true },
     ],
@@ -154,8 +154,8 @@ export const BI_MENU: MenuGroup[] = [
     key: 'bi-analytics',
     label: 'POSデータ分析',
     children: [
-      { key: 'sales', label: '売上分析', href: '/bi/sales-analytics', feature: 'analytics', pending: true },
-      { key: 'product', label: '商品分析', href: '/bi/product-analytics', feature: 'analytics', pending: true },
+      { key: 'sales', label: '売上分析', href: '/bi/sales-analytics', feature: 'analytics' },
+      { key: 'product', label: '商品分析', href: '/bi/product-analytics', feature: 'analytics' },
       { key: 'dow-hour', label: '曜日・時間帯別', href: '/bi/dow-hour', feature: 'analytics', pending: true },
       { key: 'forecast', label: '売上予測', href: '/bi/sales-forecast', feature: 'analytics', pending: true },
     ],

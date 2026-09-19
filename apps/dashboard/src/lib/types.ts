@@ -848,3 +848,113 @@ export interface LineReportingBotConfig {
   items: Record<string, boolean>;
   is_active: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// P3: 分析（仕様書 §5.1 / §6.x / §8.7）
+// ---------------------------------------------------------------------------
+
+export type PlSection = 'sales' | 'cogs' | 'labor' | 'sga';
+export type CostClass = 'variable' | 'fixed';
+export type ProductType = 'food' | 'drink' | 'other';
+
+export const PL_SECTION_LABELS: Record<PlSection, string> = {
+  sales: '売上',
+  cogs: '売上原価',
+  labor: '人件費',
+  sga: '販売管理費',
+};
+
+export interface PlAccount {
+  id: string;
+  corporation_id: string;
+  code: string | null;
+  pl_section: PlSection;
+  name: string;
+  sub_name: string | null;
+  cost_class: CostClass | null;
+  petty_cash_usable: boolean;
+  is_visible: boolean;
+  company_ids: string[];
+  note: string | null;
+  display_order: number;
+}
+
+export interface Vendor {
+  id: string;
+  corporation_id: string;
+  name: string;
+  kind: string | null;
+  note: string | null;
+  display_order: number;
+}
+
+export interface PurchaseTransaction {
+  id: string;
+  shop_id: string;
+  purchased_on: string;
+  vendor_id: string | null;
+  product_name: string;
+  spec: string | null;
+  product_type: ProductType;
+  unit_price: number;
+  quantity: number;
+  amount: number;
+  source: 'manual' | 'auto' | 'csv';
+  note: string | null;
+}
+
+export interface KpiTarget {
+  id: string;
+  shop_id: string;
+  year_month: string;
+  sales_target: number;
+  food_cost_target: number;
+  drink_cost_target: number;
+  labor_target: number;
+  sga_target: number;
+  guest_target: number;
+  avg_spend_target: number;
+}
+
+export interface DailySalesTarget {
+  shop_id: string;
+  business_date: string;
+  amount: number;
+}
+
+export interface DailyReport {
+  id: string;
+  shop_id: string;
+  business_date: string;
+  weather: string | null;
+  comment: string | null;
+}
+
+/** 日別の集計（§6.4） */
+export interface DailySummary {
+  business_date: string;
+  sales: number;
+  guest_count: number;
+  group_count: number;
+  target: number;
+}
+
+/** 時間帯別の集計（§6.9 の曜日・時間別分析） */
+export interface HourlySummary {
+  business_date: string;
+  hour: number;
+  sales: number;
+  guest_count: number;
+}
+
+/** 商品別の集計（§6.5） */
+export interface MenuSummary {
+  menu_id: string | null;
+  name: string;
+  category_name: string | null;
+  menu_type: ProductType;
+  unit_price: number;
+  qty: number;
+  sales: number;
+  gross_profit: number;
+}
