@@ -91,9 +91,12 @@ export const POS_MENU: MenuGroup[] = [
     key: 'company',
     label: '業態管理',
     children: [
-      { key: 'company-list', label: '業態一覧', href: '/company', feature: 'company_management', pending: true },
+      { key: 'company-list', label: '業態一覧', href: '/company', feature: 'company_management' },
       { key: 'payment-types', label: '支払方法等設定', href: '/paymentTypes', feature: 'payment_settings' },
-      { key: 'mo-design', label: 'モバイルオーダーデザイン', href: '/mobileOrderDesign/theme', feature: 'company_management', pending: true },
+      { key: 'auto-translation', label: '自動翻訳設定', href: '/autoTranslation', feature: 'company_management' },
+      { key: 'appetizer', label: 'お通し自動設定', href: '/menu/autoCompulsoryAppetizer', feature: 'company_management' },
+      { key: 'cash-changer', label: '自動釣銭機設定', href: '/cashChanger', feature: 'company_management' },
+      { key: 'mo-design', label: 'モバイルオーダーデザイン', href: '/mobileOrderDesign/theme', feature: 'company_management' },
     ],
   },
   {
