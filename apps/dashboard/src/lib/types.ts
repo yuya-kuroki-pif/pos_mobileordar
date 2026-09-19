@@ -220,3 +220,115 @@ export interface MenuDetail {
   dealers: (ShopMenu & { shop_name: string })[];
   translations: MenuTranslation[];
 }
+
+// ---------------------------------------------------------------------------
+// プラン（仕様書 §5.4 / §8.2）
+//
+// 飲み放題・コースなど「時間制限つきで、複数カテゴリのメニューを 0 円で
+// 注文できる」商品。価格はプランオプションの選択肢が持つ（人数 × 単価 など）。
+// ---------------------------------------------------------------------------
+
+export type PlanOptionInput = 'count' | 'select';
+
+export interface PlanGroup {
+  id: string;
+  company_id: string;
+  name: string;
+  display_order: number;
+}
+
+export interface Plan {
+  id: string;
+  company_id: string;
+  name: string;
+  receipt_display_name: string | null;
+  handy_display_name: string | null;
+  category_id: string | null;
+  plan_group_id: string | null;
+  description: string | null;
+  has_time_limit: boolean;
+  time_limit_min: number | null;
+  has_end_notice: boolean;
+  end_notice_min: number | null;
+  featured_label: string | null;
+  image_url: string | null;
+  image_size: ImageSize;
+  tax_method: TaxMethod;
+  tax_rate: number;
+  display_order: number;
+}
+
+export interface PlanChoice {
+  id: string;
+  plan_option_id: string;
+  name: string;
+  price: number;
+  is_default: boolean;
+  /** 個数入力のときの上限。null は無制限 */
+  max_count: number | null;
+  display_order: number;
+}
+
+export interface PlanOption {
+  id: string;
+  plan_id: string;
+  name: string;
+  input_type: PlanOptionInput;
+  min_kinds: number;
+  max_kinds: number;
+  display_order: number;
+  choices: PlanChoice[];
+}
+
+export interface PlanCategory {
+  id: string;
+  plan_id: string;
+  name: string;
+  display_order: number;
+}
+
+export interface PlanMenuLink {
+  plan_id: string;
+  plan_category_id: string;
+  menu_id: string;
+  price: number;
+  display_order: number;
+}
+
+export interface ShopPlan {
+  shop_id: string;
+  plan_id: string;
+  is_dealing: boolean;
+  is_visible_customer: boolean;
+  is_visible_staff: boolean;
+  in_stock: boolean;
+  display_order: number;
+}
+
+export interface PlanTranslation {
+  plan_id: string;
+  locale: Locale;
+  name: string | null;
+  description: string | null;
+  featured_label: string | null;
+}
+
+/** プラン一覧の 1 行（§5.4 の列） */
+export interface PlanRow extends Plan {
+  category_name: string | null;
+  plan_group_name: string | null;
+  option_names: string[];
+  plan_category_names: string[];
+  dealing_shop_count: number;
+}
+
+/** プラン編集画面が必要とする一式（§5.4 の 7 タブ） */
+export interface PlanDetail {
+  plan: Plan;
+  options: PlanOption[];
+  categories: PlanCategory[];
+  menus: PlanMenuLink[];
+  firstOrderMenuIds: string[];
+  dealers: (ShopPlan & { shop_name: string })[];
+  translations: PlanTranslation[];
+}

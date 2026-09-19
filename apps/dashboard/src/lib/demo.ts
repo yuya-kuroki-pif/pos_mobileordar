@@ -1,11 +1,13 @@
 import 'server-only';
 
 import { buildMenuMaster } from './demoMenu';
+import { buildPlanGroups, buildPlans, type PlanState } from './demoPlan';
 import type {
   Account,
   AccountRole,
   Category,
   MenuTranslation,
+  PlanGroup,
   ShopMenu,
   CategoryRow,
   Choice,
@@ -28,7 +30,7 @@ import type {
 
 const CORP_ID = 'corp-demo';
 
-export interface DemoState {
+export interface DemoState extends PlanState {
   corporation: Corporation;
   companies: Company[];
   shops: Shop[];
@@ -46,6 +48,9 @@ export interface DemoState {
   menuOptions: { menu_id: string; option_id: string }[];
   shopMenus: ShopMenu[];
   menuTranslations: MenuTranslation[];
+
+  // --- プラン（飲み放題・コース） ---
+  planGroups: PlanGroup[];
 }
 
 function shop(
@@ -207,6 +212,8 @@ function createState(): DemoState {
       },
     ],
     ...master,
+    planGroups: buildPlanGroups(),
+    ...buildPlans(shops),
     // 既定では全店舗が全品を扱う
     shopMenus: shops.flatMap((shop) =>
       master.menus
@@ -230,7 +237,7 @@ function createState(): DemoState {
 // HMR でモジュールが作り直されてもデータが消えないよう globalThis に置く。
 // ただし DemoState の形を変えたときは作り直したいので、版を添えて持つ。
 // （版を上げ忘れると、古い形のまま参照して実行時エラーになる）
-const STATE_VERSION = 2;
+const STATE_VERSION = 4;
 
 const g = globalThis as typeof globalThis & {
   __dashboardDemo?: { version: number; state: DemoState };

@@ -80,7 +80,7 @@ export const POS_MENU: MenuGroup[] = [
     label: 'メニューマスター',
     children: [
       { key: 'menu', label: 'メニュー', href: '/menu', feature: 'menu_master' },
-      { key: 'plan', label: 'プラン', href: '/plan', feature: 'menu_master', pending: true },
+      { key: 'plan', label: 'プラン', href: '/plan', feature: 'menu_master' },
       { key: 'option', label: 'オプション', href: '/option', feature: 'menu_master' },
       { key: 'category', label: 'カテゴリ', href: '/category', feature: 'menu_master' },
       { key: 'recommend', label: 'おすすめメニュー', href: '/menuRecommendations', feature: 'recommendation_menu', pending: true },
