@@ -229,3 +229,58 @@ export async function saveMenuTranslationsAction(
     return fail(error);
   }
 }
+
+/**
+ * 他店舗の取扱一括設定（仕様書 §5.13）。
+ *
+ * ある店舗の取扱設定を、同じ業態の別店舗へまるごと写す。
+ * 出力先（キッチンプリンター・デシャップグループ）は店舗ごとの実体なので写さない。
+ */
+export async function copyShopMenusAction(
+  sourceShopId: string,
+  targetShopIds: string[]
+): Promise<ActionResult> {
+  try {
+    const session = await requireMenuEdit();
+
+    const source = session.shops.find((shop) => shop.id === sourceShopId);
+    if (!source) return { ok: false, error: 'コピー元の店舗が見つかりません。' };
+
+    const targets = targetShopIds.filter((id) =>
+      session.shops.some((shop) => shop.id === id && shop.company_id === source.company_id)
+    );
+    if (targets.length === 0) {
+      return { ok: false, error: '同じ業態のコピー先店舗を選んでください。' };
+    }
+
+    if (isDemoMode()) {
+      demo.copyShopMenus(sourceShopId, targets);
+    } else {
+      const db = supabaseAdmin();
+
+      const { data, error } = await db.from('shop_menus').select('*').eq('shop_id', sourceShopId);
+      if (error) throw error;
+
+      const rows = (data ?? []) as Record<string, unknown>[];
+      for (const shopId of targets) {
+        const { error: upsertError } = await db.from('shop_menus').upsert(
+          rows.map((row) => ({
+            ...row,
+            shop_id: shopId,
+            // 出力先は店舗ごとの実体を指すので引き継がない
+            kitchen_printer_id: null,
+            dish_up_slip_group_id: null,
+          })),
+          { onConflict: 'shop_id,menu_id' }
+        );
+        if (upsertError) throw upsertError;
+      }
+    }
+
+    revalidatePath('/shop/menu');
+    revalidatePath('/menu');
+    return { ok: true };
+  } catch (error) {
+    return fail(error);
+  }
+}

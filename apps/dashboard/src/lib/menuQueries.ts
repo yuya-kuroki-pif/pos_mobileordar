@@ -173,6 +173,8 @@ export async function getMenuDetail(menuId: string): Promise<MenuDetail | null> 
         is_visible_customer: row?.is_visible_customer ?? false,
         is_visible_staff: row?.is_visible_staff ?? false,
         in_stock: row?.in_stock ?? true,
+        kitchen_printer_id: row?.kitchen_printer_id ?? null,
+        dish_up_slip_group_id: row?.dish_up_slip_group_id ?? null,
         stock_qty: row?.stock_qty ?? null,
         daily_stock_qty: row?.daily_stock_qty ?? null,
         display_order: row?.display_order ?? 0,

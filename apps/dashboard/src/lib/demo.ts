@@ -7,21 +7,23 @@ import type {
   AccountRole,
   BusinessHour,
   Category,
-  MenuTranslation,
-  PlanGroup,
-  ShopMenu,
   CategoryRow,
   Choice,
   Company,
   Corporation,
+  DishUpSlipGroup,
+  KitchenPrinter,
   Menu,
   MenuRow,
+  MenuTranslation,
   MenuTypeValue,
   OptionDef,
   OptionRow,
+  PlanGroup,
   RoleDefinition,
   Shop,
   ShopGroup,
+  ShopMenu,
 } from './types';
 
 /**
@@ -49,6 +51,8 @@ export interface DemoState extends PlanState {
   categoryMenus: { category_id: string; menu_id: string }[];
   menuOptions: { menu_id: string; option_id: string }[];
   shopMenus: ShopMenu[];
+  kitchenPrinters: KitchenPrinter[];
+  dishUpSlipGroups: DishUpSlipGroup[];
   menuTranslations: MenuTranslation[];
 
   // --- プラン（飲み放題・コース） ---
@@ -304,9 +308,21 @@ function createState(): DemoState {
           in_stock: true,
           stock_qty: null,
           daily_stock_qty: null,
+          // 出力先は取扱メニュー一覧（§5.13）で割り当てる
+          kitchen_printer_id: null,
+          dish_up_slip_group_id: null,
           display_order: menu.display_order,
         }))
     ),
+    kitchenPrinters: shops.flatMap((shop) => [
+      { id: `${shop.id}-kp-1`, shop_id: shop.id, name: 'キッチン', display_order: 10 },
+      { id: `${shop.id}-kp-2`, shop_id: shop.id, name: 'ドリンク場', display_order: 20 },
+      { id: `${shop.id}-kp-3`, shop_id: shop.id, name: 'レジ', display_order: 30 },
+    ]),
+    dishUpSlipGroups: shops.flatMap((shop) => [
+      { id: `${shop.id}-ds-1`, shop_id: shop.id, name: '焼き場', display_order: 10 },
+      { id: `${shop.id}-ds-2`, shop_id: shop.id, name: '冷菜', display_order: 20 },
+    ]),
     menuTranslations: [],
   };
 }
@@ -314,7 +330,7 @@ function createState(): DemoState {
 // HMR でモジュールが作り直されてもデータが消えないよう globalThis に置く。
 // ただし DemoState の形を変えたときは作り直したいので、版を添えて持つ。
 // （版を上げ忘れると、古い形のまま参照して実行時エラーになる）
-const STATE_VERSION = 5;
+const STATE_VERSION = 6;
 
 const g = globalThis as typeof globalThis & {
   __dashboardDemo?: { version: number; state: DemoState };

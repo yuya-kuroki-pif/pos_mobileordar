@@ -1,6 +1,7 @@
 'use client';
 
-import { App, Card, InputNumber, Switch, Table, Tag, Typography } from 'antd';
+import { App, Card, InputNumber, Space, Switch, Table, Tag, Typography } from 'antd';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
@@ -155,10 +156,17 @@ export function MenuDealerTable({
           {
             title: '出力先',
             key: 'printer',
-            width: 200,
-            render: () => (
-              // キッチンプリンターの登録画面（§5.15）が未実装のため警告を出す
-              <Tag color="warning">印刷設定がありません</Tag>
+            width: 220,
+            render: (_, row) => (
+              // 出力先は店舗ごとの実体なので、割り当ては取扱メニュー一覧（§5.13）で行う
+              <Space size={4}>
+                {row.kitchen_printer_id || row.dish_up_slip_group_id ? (
+                  <Tag color="blue">設定あり</Tag>
+                ) : (
+                  <Tag>未設定</Tag>
+                )}
+                <Link href={`/shop/menu?shop=${row.shop_id}`}>店舗ごとに設定 ↗</Link>
+              </Space>
             ),
           },
         ]}

@@ -101,7 +101,7 @@ export const POS_MENU: MenuGroup[] = [
     label: '店舗管理',
     children: [
       { key: 'shop-list', label: '店舗一覧', href: '/shop', feature: 'shop_management' },
-      { key: 'shop-menu', label: '取扱メニュー一覧', href: '/shop/menu', feature: 'shop_management', pending: true },
+      { key: 'shop-menu', label: '取扱メニュー一覧', href: '/shop/menu', feature: 'shop_management' },
       { key: 'orderable-time', label: 'アプリ表示時間設定', href: '/orderableTime/shop', feature: 'shop_management', pending: true },
       { key: 'role', label: 'キッチンプリンター一覧', href: '/role', feature: 'shop_management', pending: true },
       { key: 'clerk', label: '店員', href: '/clerk', feature: 'shop_management', pending: true },

@@ -242,6 +242,8 @@ export function getMenuDetail(menuId: string): MenuDetail | null {
         is_visible_customer: row?.is_visible_customer ?? false,
         is_visible_staff: row?.is_visible_staff ?? false,
         in_stock: row?.in_stock ?? true,
+        kitchen_printer_id: row?.kitchen_printer_id ?? null,
+        dish_up_slip_group_id: row?.dish_up_slip_group_id ?? null,
         stock_qty: row?.stock_qty ?? null,
         daily_stock_qty: row?.daily_stock_qty ?? null,
         display_order: row?.display_order ?? menu.display_order,
@@ -298,6 +300,8 @@ export function saveMenu(companyId: string, input: Partial<Menu> & { id?: string
       in_stock: true,
       stock_qty: null,
       daily_stock_qty: null,
+      kitchen_printer_id: null,
+      dish_up_slip_group_id: null,
       display_order: 0,
     });
   }
@@ -339,6 +343,8 @@ export function updateShopMenu(shopId: string, menuId: string, patch: Partial<Sh
     in_stock: true,
     stock_qty: null,
     daily_stock_qty: null,
+    kitchen_printer_id: null,
+    dish_up_slip_group_id: null,
     display_order: 0,
     ...patch,
   });
@@ -465,5 +471,23 @@ export function setOptionMenus(optionId: string, menuIds: string[]): void {
   state.menuOptions = state.menuOptions.filter((l) => l.option_id !== optionId);
   for (const menuId of menuIds) {
     state.menuOptions.push({ menu_id: menuId, option_id: optionId });
+  }
+}
+
+/** 他店舗の取扱一括設定（仕様書 §5.13）。出力先は店舗ごとの実体なので写さない */
+export function copyShopMenus(sourceShopId: string, targetShopIds: string[]): void {
+  const state = db();
+  const source = state.shopMenus.filter((sm) => sm.shop_id === sourceShopId);
+
+  for (const shopId of targetShopIds) {
+    state.shopMenus = state.shopMenus.filter((sm) => sm.shop_id !== shopId);
+    state.shopMenus.push(
+      ...source.map((row) => ({
+        ...row,
+        shop_id: shopId,
+        kitchen_printer_id: null,
+        dish_up_slip_group_id: null,
+      }))
+    );
   }
 }

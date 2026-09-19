@@ -268,7 +268,37 @@ export interface ShopMenu {
   stock_qty: number | null;
   /** null は「未設定」。毎日リセットされる */
   daily_stock_qty: number | null;
+  kitchen_printer_id: string | null;
+  dish_up_slip_group_id: string | null;
   display_order: number;
+}
+
+/**
+ * キッチンプリンター（仕様書 §8.3 の roles）。
+ * RBAC の roles_definitions と紛らわしいため、この名前にしている。
+ */
+export interface KitchenPrinter {
+  id: string;
+  shop_id: string;
+  name: string;
+  display_order: number;
+}
+
+/** デシャップグループ（仕様書 §5.16） */
+export interface DishUpSlipGroup {
+  id: string;
+  shop_id: string;
+  name: string;
+  display_order: number;
+}
+
+/** 取扱メニュー一覧の 1 行（仕様書 §5.13 の列） */
+export interface ShopMenuRow extends ShopMenu {
+  menu_name: string;
+  menu_type: MenuTypeValue;
+  price: number;
+  image_url: string | null;
+  category_names: string[];
 }
 
 export type Locale = 'en' | 'zh-CN' | 'ko' | 'ne' | 'vi' | 'my';
