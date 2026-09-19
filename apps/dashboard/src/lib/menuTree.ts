@@ -146,8 +146,8 @@ export const BI_MENU: MenuGroup[] = [
     key: 'bi-pl',
     label: 'PL',
     children: [
-      { key: 'monthly-pl', label: '月次 PL', href: '/bi/monthlyPl', feature: 'monthly_pl_report', pending: true },
-      { key: 'kpi-target', label: '目標設定', href: '/bi/kpiTarget', feature: 'target_management', pending: true },
+      { key: 'monthly-pl', label: '月次 PL', href: '/bi/monthlyPl', feature: 'monthly_pl_report' },
+      { key: 'kpi-target', label: '目標設定', href: '/bi/kpiTarget', feature: 'target_management' },
     ],
   },
   {
@@ -157,16 +157,16 @@ export const BI_MENU: MenuGroup[] = [
       { key: 'sales', label: '売上分析', href: '/bi/sales-analytics', feature: 'analytics' },
       { key: 'product', label: '商品分析', href: '/bi/product-analytics', feature: 'analytics' },
       { key: 'dow-hour', label: '曜日・時間帯別', href: '/bi/dow-hour', feature: 'analytics' },
-      { key: 'forecast', label: '売上予測', href: '/bi/sales-forecast', feature: 'analytics', pending: true },
+      { key: 'forecast', label: '売上予測', href: '/bi/sales-forecast', feature: 'analytics' },
     ],
   },
   {
     key: 'bi-transaction',
     label: '取引登録',
     children: [
-      { key: 'purchase', label: '仕入れ登録', href: '/bi/inventoryPurchaseTransaction', feature: 'purchase_list', pending: true },
-      { key: 'petty-cash', label: '小口現金', href: '/bi/pettyCash', feature: 'petty_cash', pending: true },
-      { key: 'income-expense', label: '収支登録', href: '/bi/incomeExpense', feature: 'income_expense', pending: true },
+      { key: 'purchase', label: '仕入れ登録', href: '/bi/inventoryPurchaseTransaction', feature: 'purchase_list' },
+      { key: 'petty-cash', label: '小口現金', href: '/bi/pettyCash', feature: 'petty_cash' },
+      { key: 'income-expense', label: '収支登録', href: '/bi/incomeExpense', feature: 'income_expense' },
     ],
   },
   {

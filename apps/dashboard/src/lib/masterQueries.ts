@@ -72,6 +72,15 @@ async function readOptions(
         .filter((p) => p.shop_id === shopId)
         .map((p) => ({ value: p.id, label: p.name }));
     }
+    if (source === 'vendors') {
+      return state.vendors.map((v) => ({ value: v.id, label: v.name }));
+    }
+    if (source === 'plAccounts') {
+      return state.plAccounts.map((a) => ({
+        value: a.id,
+        label: a.sub_name ? `${a.name} / ${a.sub_name}` : a.name,
+      }));
+    }
     return state.menus
       .filter((m) => m.company_id === companyId)
       .map((m) => ({ value: m.id, label: m.name }));
@@ -89,6 +98,27 @@ async function readOptions(
     return ((data ?? []) as { id: string; name: string }[]).map((r) => ({
       value: r.id,
       label: r.name,
+    }));
+  }
+
+  if (source === 'vendors') {
+    const { data, error } = await supabase.from('vendors').select('id, name').order('display_order');
+    if (error) throw new Error(error.message);
+    return ((data ?? []) as { id: string; name: string }[]).map((r) => ({
+      value: r.id,
+      label: r.name,
+    }));
+  }
+
+  if (source === 'plAccounts') {
+    const { data, error } = await supabase
+      .from('pl_accounts')
+      .select('id, name, sub_name')
+      .order('display_order');
+    if (error) throw new Error(error.message);
+    return ((data ?? []) as { id: string; name: string; sub_name: string | null }[]).map((r) => ({
+      value: r.id,
+      label: r.sub_name ? `${r.name} / ${r.sub_name}` : r.name,
     }));
   }
 

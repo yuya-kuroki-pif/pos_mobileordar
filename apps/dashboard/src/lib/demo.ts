@@ -97,6 +97,8 @@ export interface DemoState extends PlanState, TransactionState {
   plAccounts: PlAccount[];
   vendors: Vendor[];
   purchaseTransactions: PurchaseTransaction[];
+  pettyCashTransactions: Record<string, unknown>[];
+  incomeExpenseTransactions: Record<string, unknown>[];
   kpiTargets: KpiTarget[];
   dailySalesTargets: DailySalesTarget[];
   dailyReports: DailyReport[];
@@ -451,7 +453,7 @@ function createState(): DemoState {
 // HMR でモジュールが作り直されてもデータが消えないよう globalThis に置く。
 // ただし DemoState の形を変えたときは作り直したいので、版を添えて持つ。
 // （版を上げ忘れると、古い形のまま参照して実行時エラーになる）
-const STATE_VERSION = 11;
+const STATE_VERSION = 13;
 
 const g = globalThis as typeof globalThis & {
   __dashboardDemo?: { version: number; state: DemoState };
@@ -730,7 +732,7 @@ function buildBiSeeds(corporationId: string, shopIds: string[]) {
   ];
 
   const vendors: Vendor[] = [
-    { id: 'vendor-1', corporation_id: corporationId, name: '丸product 青果', kind: '食材', note: null, display_order: 10 },
+    { id: 'vendor-1', corporation_id: corporationId, name: '丸一青果', kind: '食材', note: null, display_order: 10 },
     { id: 'vendor-2', corporation_id: corporationId, name: '山田酒店', kind: '酒類', note: null, display_order: 20 },
     { id: 'vendor-3', corporation_id: corporationId, name: '東京ミート', kind: '精肉', note: null, display_order: 30 },
   ];
@@ -792,6 +794,8 @@ function buildBiSeeds(corporationId: string, shopIds: string[]) {
     purchaseTransactions,
     kpiTargets,
     dailySalesTargets,
+    pettyCashTransactions: [] as Record<string, unknown>[],
+    incomeExpenseTransactions: [] as Record<string, unknown>[],
     dailyReports: [] as DailyReport[],
   };
 }

@@ -11,7 +11,7 @@ import type { FeatureKey } from './permissions';
 export type MasterScope = 'corporation' | 'company' | 'shop';
 
 /** select の選択肢をどこから作るか */
-export type OptionSource = 'kitchenPrinters' | 'menus';
+export type OptionSource = 'kitchenPrinters' | 'menus' | 'vendors' | 'plAccounts';
 
 export type MasterFieldType = 'text' | 'number' | 'money' | 'switch' | 'select' | 'enum';
 
@@ -207,6 +207,89 @@ export const MASTERS: Record<string, MasterDef> = {
       { key: 'note', label: '備考', type: 'text', formOnly: true, defaultValue: null },
       ORDER_FIELD,
     ],
+  },
+
+  purchase: {
+    key: 'purchase',
+    table: 'purchase_transactions',
+    demoKey: 'purchaseTransactions',
+    scope: 'shop',
+    title: '仕入れ',
+    description: '食材や酒類の仕入れを記録します。原価率の計算に使います',
+    breadcrumb: ['経営管理', '仕入れ登録'],
+    feature: 'purchase_list',
+    fields: [
+      { key: 'purchased_on', label: '仕入日', type: 'text', required: true, width: 120, placeholder: '2026-09-19' },
+      { key: 'vendor_id', label: '取引先', type: 'select', optionsFrom: 'vendors', width: 180, defaultValue: null },
+      { key: 'product_name', label: '商品名', type: 'text', required: true, width: 200 },
+      { key: 'spec', label: '規格', type: 'text', width: 120, defaultValue: null },
+      {
+        key: 'product_type',
+        label: '商品タイプ',
+        type: 'enum',
+        width: 130,
+        choices: [
+          { value: 'food', label: 'フード' },
+          { value: 'drink', label: 'ドリンク' },
+          { value: 'other', label: 'その他' },
+        ],
+        defaultValue: 'food',
+      },
+      { key: 'unit_price', label: '単価（税抜）', type: 'money', width: 130, defaultValue: 0 },
+      { key: 'quantity', label: '数量', type: 'number', width: 100, defaultValue: 1 },
+      { key: 'amount', label: '仕入金額（税抜）', type: 'money', width: 150, defaultValue: 0 },
+      { key: 'note', label: '備考', type: 'text', formOnly: true, defaultValue: null },
+    ],
+    needs: ['vendors'],
+  },
+
+  pettyCash: {
+    key: 'pettyCash',
+    table: 'petty_cash_transactions',
+    demoKey: 'pettyCashTransactions',
+    scope: 'shop',
+    title: '小口現金',
+    description: 'レジから出し入れした現金の記録',
+    breadcrumb: ['経営管理', '小口現金'],
+    feature: 'petty_cash',
+    fields: [
+      { key: 'occurred_on', label: '日付', type: 'text', required: true, width: 120, placeholder: '2026-09-19' },
+      { key: 'pl_account_id', label: '科目', type: 'select', optionsFrom: 'plAccounts', width: 200, defaultValue: null },
+      { key: 'vendor_id', label: '取引先', type: 'select', optionsFrom: 'vendors', width: 180, defaultValue: null },
+      {
+        key: 'kind',
+        label: '区分',
+        type: 'enum',
+        width: 100,
+        choices: [
+          { value: 'in', label: '入金' },
+          { value: 'out', label: '出金' },
+        ],
+        defaultValue: 'out',
+      },
+      { key: 'amount', label: '金額', type: 'money', width: 130, defaultValue: 0 },
+      { key: 'note', label: '備考', type: 'text', defaultValue: null },
+    ],
+    needs: ['vendors', 'plAccounts'],
+  },
+
+  incomeExpense: {
+    key: 'incomeExpense',
+    table: 'income_expense_transactions',
+    demoKey: 'incomeExpenseTransactions',
+    scope: 'shop',
+    title: '収支',
+    description: '売上と仕入れ以外の収入・支出',
+    breadcrumb: ['経営管理', '収支登録'],
+    feature: 'income_expense',
+    fields: [
+      { key: 'occurred_on', label: '日付', type: 'text', required: true, width: 120, placeholder: '2026-09-19' },
+      { key: 'pl_account_id', label: '科目', type: 'select', optionsFrom: 'plAccounts', width: 200, defaultValue: null },
+      { key: 'vendor_id', label: '取引先', type: 'select', optionsFrom: 'vendors', width: 180, defaultValue: null },
+      { key: 'amount', label: '金額', type: 'money', width: 130, defaultValue: 0 },
+      { key: 'note', label: '備考', type: 'text', defaultValue: null },
+    ],
+    needs: ['vendors', 'plAccounts'],
   },
 
   vendor: {
