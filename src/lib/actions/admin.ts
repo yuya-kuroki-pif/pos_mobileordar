@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache';
 
 import { getStaffSession } from '../auth';
-import { supabaseAdmin } from '../supabase';
+import * as demo from '../demo/repo';
+import { isDemoMode, supabaseAdmin } from '../supabase';
 import type { PrepStation } from '../types';
 
 export interface ActionResult {
@@ -45,18 +46,22 @@ export async function saveCategory(formData: FormData): Promise<ActionResult> {
     if (!name) return { ok: false, error: 'カテゴリ名を入力してください。' };
 
     const payload = {
-      store_id: storeId,
       name,
       description: text(formData, 'description') || null,
       sort_order: num(formData, 'sort_order'),
       is_active: formData.get('is_active') !== null,
     };
 
-    const db = supabaseAdmin();
-    const { error } = id
-      ? await db.from('categories').update(payload).eq('id', id).eq('store_id', storeId)
-      : await db.from('categories').insert(payload);
-    if (error) throw error;
+    if (isDemoMode()) {
+      demo.saveCategory({ id, ...payload });
+    } else {
+      const db = supabaseAdmin();
+      const row = { store_id: storeId, ...payload };
+      const { error } = id
+        ? await db.from('categories').update(row).eq('id', id).eq('store_id', storeId)
+        : await db.from('categories').insert(row);
+      if (error) throw error;
+    }
 
     revalidatePath('/admin/menu');
     return { ok: true };
@@ -68,13 +73,18 @@ export async function saveCategory(formData: FormData): Promise<ActionResult> {
 export async function deleteCategory(id: string): Promise<ActionResult> {
   try {
     const storeId = await requireStoreId();
-    // 商品は category_id が null になるだけで消えない（on delete set null）
-    const { error } = await supabaseAdmin()
-      .from('categories')
-      .delete()
-      .eq('id', id)
-      .eq('store_id', storeId);
-    if (error) throw error;
+
+    if (isDemoMode()) {
+      demo.deleteCategory(id);
+    } else {
+      // 商品は category_id が null になるだけで消えない（on delete set null）
+      const { error } = await supabaseAdmin()
+        .from('categories')
+        .delete()
+        .eq('id', id)
+        .eq('store_id', storeId);
+      if (error) throw error;
+    }
 
     revalidatePath('/admin/menu');
     return { ok: true };
@@ -94,14 +104,11 @@ export async function saveMenuItem(formData: FormData): Promise<ActionResult> {
     const name = text(formData, 'name');
     if (!name) return { ok: false, error: '商品名を入力してください。' };
 
-    const price = Math.max(0, Math.round(num(formData, 'price')));
-
     const payload = {
-      store_id: storeId,
       category_id: text(formData, 'category_id') || null,
       name,
       description: text(formData, 'description') || null,
-      price,
+      price: Math.max(0, Math.round(num(formData, 'price'))),
       image_url: text(formData, 'image_url') || null,
       prep_station: (text(formData, 'prep_station') || 'kitchen') as PrepStation,
       is_available: formData.get('is_available') !== null,
@@ -109,11 +116,16 @@ export async function saveMenuItem(formData: FormData): Promise<ActionResult> {
       sort_order: num(formData, 'sort_order'),
     };
 
-    const db = supabaseAdmin();
-    const { error } = id
-      ? await db.from('menu_items').update(payload).eq('id', id).eq('store_id', storeId)
-      : await db.from('menu_items').insert(payload);
-    if (error) throw error;
+    if (isDemoMode()) {
+      demo.saveMenuItem({ id, ...payload });
+    } else {
+      const db = supabaseAdmin();
+      const row = { store_id: storeId, ...payload };
+      const { error } = id
+        ? await db.from('menu_items').update(row).eq('id', id).eq('store_id', storeId)
+        : await db.from('menu_items').insert(row);
+      if (error) throw error;
+    }
 
     revalidatePath('/admin/menu');
     return { ok: true };
@@ -126,12 +138,17 @@ export async function saveMenuItem(formData: FormData): Promise<ActionResult> {
 export async function toggleSoldOut(id: string, soldOut: boolean): Promise<ActionResult> {
   try {
     const storeId = await requireStoreId();
-    const { error } = await supabaseAdmin()
-      .from('menu_items')
-      .update({ is_sold_out: soldOut })
-      .eq('id', id)
-      .eq('store_id', storeId);
-    if (error) throw error;
+
+    if (isDemoMode()) {
+      demo.toggleSoldOut(id, soldOut);
+    } else {
+      const { error } = await supabaseAdmin()
+        .from('menu_items')
+        .update({ is_sold_out: soldOut })
+        .eq('id', id)
+        .eq('store_id', storeId);
+      if (error) throw error;
+    }
 
     revalidatePath('/admin/menu');
     revalidatePath('/pos');
@@ -144,13 +161,18 @@ export async function toggleSoldOut(id: string, soldOut: boolean): Promise<Actio
 export async function deleteMenuItem(id: string): Promise<ActionResult> {
   try {
     const storeId = await requireStoreId();
-    // 過去の注文明細は name_snapshot を持っているので、商品を消しても伝票は壊れない
-    const { error } = await supabaseAdmin()
-      .from('menu_items')
-      .delete()
-      .eq('id', id)
-      .eq('store_id', storeId);
-    if (error) throw error;
+
+    if (isDemoMode()) {
+      demo.deleteMenuItem(id);
+    } else {
+      // 過去の注文明細は name_snapshot を持っているので、商品を消しても伝票は壊れない
+      const { error } = await supabaseAdmin()
+        .from('menu_items')
+        .delete()
+        .eq('id', id)
+        .eq('store_id', storeId);
+      if (error) throw error;
+    }
 
     revalidatePath('/admin/menu');
     return { ok: true };
@@ -171,7 +193,6 @@ export async function saveTable(formData: FormData): Promise<ActionResult> {
     if (!name) return { ok: false, error: '卓名を入力してください。' };
 
     const payload = {
-      store_id: storeId,
       name,
       area: text(formData, 'area') || null,
       seats: Math.max(1, Math.round(num(formData, 'seats', 4))),
@@ -179,11 +200,16 @@ export async function saveTable(formData: FormData): Promise<ActionResult> {
       is_active: formData.get('is_active') !== null,
     };
 
-    const db = supabaseAdmin();
-    const { error } = id
-      ? await db.from('restaurant_tables').update(payload).eq('id', id).eq('store_id', storeId)
-      : await db.from('restaurant_tables').insert(payload);
-    if (error) throw error;
+    if (isDemoMode()) {
+      demo.saveTable({ id, ...payload });
+    } else {
+      const db = supabaseAdmin();
+      const row = { store_id: storeId, ...payload };
+      const { error } = id
+        ? await db.from('restaurant_tables').update(row).eq('id', id).eq('store_id', storeId)
+        : await db.from('restaurant_tables').insert(row);
+      if (error) throw error;
+    }
 
     revalidatePath('/admin/tables');
     revalidatePath('/pos');
@@ -196,20 +222,25 @@ export async function saveTable(formData: FormData): Promise<ActionResult> {
 export async function deleteTable(id: string): Promise<ActionResult> {
   try {
     const storeId = await requireStoreId();
-    const { error } = await supabaseAdmin()
-      .from('restaurant_tables')
-      .delete()
-      .eq('id', id)
-      .eq('store_id', storeId);
-    if (error) {
-      // 過去のセッションから参照されている卓は消せない（on delete restrict）
-      if (error.code === '23503') {
-        return {
-          ok: false,
-          error: 'この卓には利用履歴があるため削除できません。「利用しない」に切り替えてください。',
-        };
+
+    if (isDemoMode()) {
+      demo.deleteTable(id);
+    } else {
+      const { error } = await supabaseAdmin()
+        .from('restaurant_tables')
+        .delete()
+        .eq('id', id)
+        .eq('store_id', storeId);
+      if (error) {
+        // 過去のセッションから参照されている卓は消せない（on delete restrict）
+        if (error.code === '23503') {
+          return {
+            ok: false,
+            error: 'この卓には利用履歴があるため削除できません。「利用しない」に切り替えてください。',
+          };
+        }
+        throw error;
       }
-      throw error;
     }
 
     revalidatePath('/admin/tables');
@@ -224,14 +255,19 @@ export async function deleteTable(id: string): Promise<ActionResult> {
 export async function regenerateQrToken(id: string): Promise<ActionResult> {
   try {
     const storeId = await requireStoreId();
-    const token = crypto.randomUUID().replace(/-/g, '');
 
-    const { error } = await supabaseAdmin()
-      .from('restaurant_tables')
-      .update({ qr_token: token })
-      .eq('id', id)
-      .eq('store_id', storeId);
-    if (error) throw error;
+    let token: string;
+    if (isDemoMode()) {
+      token = demo.regenerateQrToken(id);
+    } else {
+      token = crypto.randomUUID().replace(/-/g, '');
+      const { error } = await supabaseAdmin()
+        .from('restaurant_tables')
+        .update({ qr_token: token })
+        .eq('id', id)
+        .eq('store_id', storeId);
+      if (error) throw error;
+    }
 
     revalidatePath('/admin/tables');
     return { ok: true, id: token };
@@ -261,8 +297,12 @@ export async function saveStoreSettings(formData: FormData): Promise<ActionResul
 
     if (!payload.name) return { ok: false, error: '店舗名を入力してください。' };
 
-    const { error } = await supabaseAdmin().from('stores').update(payload).eq('id', storeId);
-    if (error) throw error;
+    if (isDemoMode()) {
+      demo.saveStoreSettings(payload);
+    } else {
+      const { error } = await supabaseAdmin().from('stores').update(payload).eq('id', storeId);
+      if (error) throw error;
+    }
 
     revalidatePath('/admin/settings');
     return { ok: true };
@@ -280,11 +320,15 @@ export async function changePin(formData: FormData): Promise<ActionResult> {
       return { ok: false, error: 'PIN は 4〜8 桁の数字で入力してください。' };
     }
 
-    const { error } = await supabaseAdmin().rpc('set_staff_pin', {
-      p_store_id: storeId,
-      p_pin: pin,
-    });
-    if (error) throw error;
+    if (isDemoMode()) {
+      demo.changePin();
+    } else {
+      const { error } = await supabaseAdmin().rpc('set_staff_pin', {
+        p_store_id: storeId,
+        p_pin: pin,
+      });
+      if (error) throw error;
+    }
 
     return { ok: true };
   } catch (error) {

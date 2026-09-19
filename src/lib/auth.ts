@@ -4,7 +4,9 @@ import crypto from 'node:crypto';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { supabaseAdmin } from './supabase';
+import * as demo from './demo/repo';
+import { getStoreById } from './queries';
+import { isDemoMode, supabaseAdmin } from './supabase';
 import type { Store } from './types';
 
 const COOKIE_NAME = 'pos_staff_session';
@@ -64,16 +66,23 @@ function decode(token: string): StaffSession | null {
  * 成功すれば true、PIN 不一致なら false。
  */
 export async function loginWithPin(storeSlug: string, pin: string): Promise<boolean> {
-  const { data, error } = await supabaseAdmin().rpc('verify_staff_pin', {
-    p_slug: storeSlug,
-    p_pin: pin,
-  });
+  let storeId: string | null;
 
-  if (error) throw new Error(`PIN の照合に失敗しました: ${error.message}`);
-  if (!data) return false;
+  if (isDemoMode()) {
+    storeId = demo.verifyPin(storeSlug, pin);
+  } else {
+    const { data, error } = await supabaseAdmin().rpc('verify_staff_pin', {
+      p_slug: storeSlug,
+      p_pin: pin,
+    });
+    if (error) throw new Error(`PIN の照合に失敗しました: ${error.message}`);
+    storeId = (data as string | null) ?? null;
+  }
+
+  if (!storeId) return false;
 
   const session: StaffSession = {
-    storeId: data as string,
+    storeId,
     storeSlug,
     issuedAt: Math.floor(Date.now() / 1000),
   };
@@ -107,17 +116,14 @@ export async function requireStore(): Promise<Store> {
   const session = await getStaffSession();
   if (!session) redirect('/login');
 
-  const { data, error } = await supabaseAdmin()
-    .from('stores')
-    .select('*')
-    .eq('id', session.storeId)
-    .single<Store>();
+  const store = await getStoreById(session.storeId);
 
-  // 店舗が消えている（DB を作り直した等）場合もログインからやり直させる
-  if (error || !data) {
+  // 店舗が消えている（DB を作り直した、デモデータが初期化された等）場合も
+  // ログインからやり直させる
+  if (!store) {
     await logout();
     redirect('/login');
   }
 
-  return data;
+  return store;
 }

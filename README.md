@@ -43,7 +43,27 @@ Supabase Realtime を使うとブラウザから DB への直接接続が必要�
 1 店舗あたりの端末は数台なので、4〜10 秒間隔のポーリングで十分と判断しました
 （`src/lib/useLiveData.ts`。タブが裏に回っている間は停止します）。
 
-## セットアップ
+## すぐ動かす（デモモード）
+
+データベースを用意せずに全画面を触れます。クローン直後の確認や、画面を人に見せたいときに。
+
+```bash
+npm install
+npm run dev
+```
+
+<http://localhost:3000> を開き、**店舗コード `demo` / PIN `1234`** でログインしてください。
+卓・メニュー・進行中の注文・会計済みの売上まで、一通りのデータが最初から入っています。
+
+デモモードは `SUPABASE_SERVICE_ROLE_KEY` が未設定の開発環境で自動的に有効になります
+（明示するなら `NEXT_PUBLIC_DEMO_MODE=1`）。データはサーバーのメモリ上にあり、
+**再起動すると初期状態に戻ります**。動作中は画面上部に黄色い帯で表示されます。
+
+実装は `src/lib/demo/` にまとまっていて、`queries.ts` と `actions/` が
+冒頭で `isDemoMode()` を見て委譲します。金額計算・伝票番号の採番・会計処理は
+`supabase/migrations/` の SQL 関数と同じ手順を踏むようにしてあります。
+
+## セットアップ（実データ）
 
 ### 1. Supabase プロジェクトを作る
 
@@ -97,8 +117,7 @@ npm run dev
 ```
 
 <http://localhost:3000> を開くと各画面への入口が表示されます。
-
-デモデータの初期ログインは **店舗コード `demo` / PIN `1234`** です。
+`seed.sql` を流した場合の初期ログインは **店舗コード `demo` / PIN `1234`** です。
 本番で使う前に、管理画面の「店舗設定」から PIN を変更してください。
 
 ## 動作確認の流れ
@@ -154,9 +173,10 @@ src/
 ├─ components/              画面をまたいで使う部品
 └─ lib/
    ├─ actions/              Server Actions（書き込み）
+   ├─ demo/                 デモモードのインメモリ実装（data.ts / repo.ts）
    ├─ queries.ts            読み取り
    ├─ auth.ts               PIN セッション（HMAC 署名 Cookie）
-   ├─ supabase.ts           service_role クライアント
+   ├─ supabase.ts           service_role クライアント / デモモード判定
    └─ types.ts              DB に対応する型
 
 supabase/

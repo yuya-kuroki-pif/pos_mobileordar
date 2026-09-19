@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache';
 
 import { getStaffSession } from '../auth';
-import { getOpenSessionForTable, getTableByToken } from '../queries';
-import { supabaseAdmin } from '../supabase';
+import * as demo from '../demo/repo';
+import { getOpenSessionForTable, getStoreById, getTableByToken } from '../queries';
+import { isDemoMode, supabaseAdmin } from '../supabase';
 import type { OrderChannel, OrderItemStatus, PaymentMethod } from '../types';
 
 /** 注文 1 行ぶんの入力。価格はサーバー側で引き直すため送らせない */
@@ -42,14 +43,10 @@ export async function startSession(token: string, guestCount: number): Promise<A
     const table = await getTableByToken(token);
     if (!table) return { ok: false, error: 'この QR コードは無効です。店員にお声がけください。' };
 
-    const { data, error } = await supabaseAdmin().rpc('open_table_session', {
-      p_table_id: table.id,
-      p_guest_count: guestCount,
-    });
-    if (error) throw error;
+    const sessionId = await openSession(table.id, guestCount);
 
     revalidatePath(`/order/${token}`);
-    return { ok: true, id: data as string };
+    return { ok: true, id: sessionId };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -66,11 +63,7 @@ export async function placeMobileOrder(
     if (!table) return { ok: false, error: 'この QR コードは無効です。' };
 
     // 店舗がモバイルオーダーを閉じている場合は受け付けない
-    const { data: store } = await supabaseAdmin()
-      .from('stores')
-      .select('mobile_order_open')
-      .eq('id', table.store_id)
-      .single();
+    const store = await getStoreById(table.store_id);
     if (store && !store.mobile_order_open) {
       return { ok: false, error: '現在モバイルオーダーの受付を停止しています。店員にお声がけください。' };
     }
@@ -99,12 +92,16 @@ export async function requestBill(token: string): Promise<ActionResult> {
     const session = await getOpenSessionForTable(table.id);
     if (!session) return { ok: false, error: 'ご利用中の情報が見つかりません。' };
 
-    const { error } = await supabaseAdmin()
-      .from('table_sessions')
-      .update({ status: 'bill_requested' })
-      .eq('id', session.id)
-      .eq('status', 'open');
-    if (error) throw error;
+    if (isDemoMode()) {
+      demo.requestBill(session.id);
+    } else {
+      const { error } = await supabaseAdmin()
+        .from('table_sessions')
+        .update({ status: 'bill_requested' })
+        .eq('id', session.id)
+        .eq('status', 'open');
+      if (error) throw error;
+    }
 
     revalidatePath(`/order/${token}`);
     revalidatePath('/pos');
@@ -130,23 +127,21 @@ export async function openTable(tableId: string, guestCount: number): Promise<Ac
   try {
     const storeId = await requireStoreId();
 
-    // 他店舗の卓を開けられないよう確認する
-    const { data: table } = await supabaseAdmin()
-      .from('restaurant_tables')
-      .select('id')
-      .eq('id', tableId)
-      .eq('store_id', storeId)
-      .maybeSingle();
-    if (!table) return { ok: false, error: '卓が見つかりません。' };
+    if (!isDemoMode()) {
+      // 他店舗の卓を開けられないよう確認する
+      const { data: table } = await supabaseAdmin()
+        .from('restaurant_tables')
+        .select('id')
+        .eq('id', tableId)
+        .eq('store_id', storeId)
+        .maybeSingle();
+      if (!table) return { ok: false, error: '卓が見つかりません。' };
+    }
 
-    const { data, error } = await supabaseAdmin().rpc('open_table_session', {
-      p_table_id: tableId,
-      p_guest_count: guestCount,
-    });
-    if (error) throw error;
+    const sessionId = await openSession(tableId, guestCount);
 
     revalidatePath('/pos');
-    return { ok: true, id: data as string };
+    return { ok: true, id: sessionId };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -181,12 +176,16 @@ export async function updateItemStatus(
   try {
     const storeId = await requireStoreId();
 
-    const { error } = await supabaseAdmin()
-      .from('order_items')
-      .update({ status })
-      .eq('id', itemId)
-      .eq('store_id', storeId);
-    if (error) throw error;
+    if (isDemoMode()) {
+      demo.updateItemStatus(itemId, status);
+    } else {
+      const { error } = await supabaseAdmin()
+        .from('order_items')
+        .update({ status })
+        .eq('id', itemId)
+        .eq('store_id', storeId);
+      if (error) throw error;
+    }
 
     revalidatePath('/kds');
     revalidatePath('/pos');
@@ -203,19 +202,22 @@ export async function updateItemQuantity(
 ): Promise<ActionResult> {
   try {
     const storeId = await requireStoreId();
-    const db = supabaseAdmin();
 
-    const patch =
-      quantity <= 0
-        ? { status: 'cancelled' as OrderItemStatus }
-        : { quantity: Math.floor(quantity) };
+    if (isDemoMode()) {
+      demo.updateItemQuantity(itemId, quantity);
+    } else {
+      const patch =
+        quantity <= 0
+          ? { status: 'cancelled' as OrderItemStatus }
+          : { quantity: Math.floor(quantity) };
 
-    const { error } = await db
-      .from('order_items')
-      .update(patch)
-      .eq('id', itemId)
-      .eq('store_id', storeId);
-    if (error) throw error;
+      const { error } = await supabaseAdmin()
+        .from('order_items')
+        .update(patch)
+        .eq('id', itemId)
+        .eq('store_id', storeId);
+      if (error) throw error;
+    }
 
     revalidatePath('/pos');
     revalidatePath('/kds');
@@ -237,18 +239,27 @@ export async function checkout(
     const storeId = await requireStoreId();
     await assertSessionInStore(sessionId, storeId);
 
-    const { data, error } = await supabaseAdmin().rpc('checkout_session', {
-      p_session_id: sessionId,
-      p_method: method,
-      p_discount: Math.max(0, Math.floor(discount)),
-      p_received: Math.max(0, Math.floor(received)),
-      p_note: note ?? null,
-    });
-    if (error) throw error;
+    const safeDiscount = Math.max(0, Math.floor(discount));
+    const safeReceived = Math.max(0, Math.floor(received));
+
+    let paymentId: string;
+    if (isDemoMode()) {
+      paymentId = demo.checkoutSession(sessionId, method, safeDiscount, safeReceived);
+    } else {
+      const { data, error } = await supabaseAdmin().rpc('checkout_session', {
+        p_session_id: sessionId,
+        p_method: method,
+        p_discount: safeDiscount,
+        p_received: safeReceived,
+        p_note: note ?? null,
+      });
+      if (error) throw error;
+      paymentId = data as string;
+    }
 
     revalidatePath('/pos');
     revalidatePath('/admin');
-    return { ok: true, id: data as string };
+    return { ok: true, id: paymentId };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -263,11 +274,15 @@ export async function updateGuestCount(
     const storeId = await requireStoreId();
     await assertSessionInStore(sessionId, storeId);
 
-    const { error } = await supabaseAdmin()
-      .from('table_sessions')
-      .update({ guest_count: Math.max(1, Math.floor(guestCount)) })
-      .eq('id', sessionId);
-    if (error) throw error;
+    if (isDemoMode()) {
+      demo.updateGuestCount(sessionId, guestCount);
+    } else {
+      const { error } = await supabaseAdmin()
+        .from('table_sessions')
+        .update({ guest_count: Math.max(1, Math.floor(guestCount)) })
+        .eq('id', sessionId);
+      if (error) throw error;
+    }
 
     revalidatePath('/pos');
     revalidatePath(`/pos/session/${sessionId}`);
@@ -282,23 +297,28 @@ export async function cancelSession(sessionId: string): Promise<ActionResult> {
   try {
     const storeId = await requireStoreId();
     await assertSessionInStore(sessionId, storeId);
-    const db = supabaseAdmin();
 
-    const { count } = await db
-      .from('order_items')
-      .select('id', { count: 'exact', head: true })
-      .eq('session_id', sessionId)
-      .neq('status', 'cancelled');
+    if (isDemoMode()) {
+      demo.cancelSession(sessionId);
+    } else {
+      const db = supabaseAdmin();
 
-    if ((count ?? 0) > 0) {
-      return { ok: false, error: '注文が入っているため取り消せません。会計を行ってください。' };
+      const { count } = await db
+        .from('order_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('session_id', sessionId)
+        .neq('status', 'cancelled');
+
+      if ((count ?? 0) > 0) {
+        return { ok: false, error: '注文が入っているため取り消せません。会計を行ってください。' };
+      }
+
+      const { error } = await db
+        .from('table_sessions')
+        .update({ status: 'cancelled', closed_at: new Date().toISOString() })
+        .eq('id', sessionId);
+      if (error) throw error;
     }
-
-    const { error } = await db
-      .from('table_sessions')
-      .update({ status: 'cancelled', closed_at: new Date().toISOString() })
-      .eq('id', sessionId);
-    if (error) throw error;
 
     revalidatePath('/pos');
     return { ok: true };
@@ -310,6 +330,17 @@ export async function cancelSession(sessionId: string): Promise<ActionResult> {
 // ===========================================================================
 // 内部ヘルパー
 // ===========================================================================
+
+async function openSession(tableId: string, guestCount: number): Promise<string> {
+  if (isDemoMode()) return demo.openTableSession(tableId, guestCount);
+
+  const { data, error } = await supabaseAdmin().rpc('open_table_session', {
+    p_table_id: tableId,
+    p_guest_count: guestCount,
+  });
+  if (error) throw error;
+  return data as string;
+}
 
 async function insertOrder(
   sessionId: string,
@@ -328,20 +359,32 @@ async function insertOrder(
 
   if (items.length === 0) return { ok: false, error: '注文内容が空です。' };
 
-  const { data, error } = await supabaseAdmin().rpc('place_order', {
-    p_session_id: sessionId,
-    p_channel: channel,
-    p_items: items,
-    p_note: note ?? null,
-  });
-  if (error) throw error;
+  let orderId: string;
+  if (isDemoMode()) {
+    orderId = demo.placeOrder(sessionId, channel, items);
+  } else {
+    const { data, error } = await supabaseAdmin().rpc('place_order', {
+      p_session_id: sessionId,
+      p_channel: channel,
+      p_items: items,
+      p_note: note ?? null,
+    });
+    if (error) throw error;
+    orderId = data as string;
+  }
 
   revalidatePath('/kds');
-  return { ok: true, id: data as string };
+  return { ok: true, id: orderId };
 }
 
 /** セッションが自店舗のものであることを確認する */
 async function assertSessionInStore(sessionId: string, storeId: string): Promise<void> {
+  if (isDemoMode()) {
+    const session = demo.getSession(sessionId);
+    if (!session || session.store_id !== storeId) throw new Error('対象の卓が見つかりません。');
+    return;
+  }
+
   const { data } = await supabaseAdmin()
     .from('table_sessions')
     .select('id')

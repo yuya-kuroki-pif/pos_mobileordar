@@ -9,7 +9,7 @@ import {
   getStoreById,
   getTableByToken,
 } from '@/lib/queries';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { isDemoMode, isSupabaseConfigured } from '@/lib/supabase';
 
 import { MobileOrder } from './MobileOrder';
 import { Welcome } from './Welcome';
@@ -17,7 +17,7 @@ import { Welcome } from './Welcome';
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
-  if (!isSupabaseConfigured()) return { title: 'モバイルオーダー' };
+  if (!isSupabaseConfigured() && !isDemoMode()) return { title: 'モバイルオーダー' };
   const { token } = await params;
   const table = await getTableByToken(token);
   const store = table ? await getStoreById(table.store_id) : null;
@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: { params: Promise<{ token: st
  * 認証はなく、「推測できない qr_token を知っていること」を入店の根拠にしている。
  */
 export default async function OrderPage({ params }: { params: Promise<{ token: string }> }) {
-  if (!isSupabaseConfigured()) {
+  if (!isSupabaseConfigured() && !isDemoMode()) {
     return (
       <main className="px-4 py-10">
         <SetupNotice />

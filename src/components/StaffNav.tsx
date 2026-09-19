@@ -2,6 +2,8 @@ import Link from 'next/link';
 
 import { logoutAction } from '@/lib/actions/auth';
 
+import { DemoBanner } from './DemoBanner';
+
 /** スタッフ向け画面（POS / KDS / 管理）に共通のヘッダー */
 export function StaffNav({
   storeName,
@@ -22,6 +24,8 @@ export function StaffNav({
   const dark = tone === 'dark';
 
   return (
+    <>
+    <DemoBanner />
     <header
       className={`no-select sticky top-0 z-20 flex items-center gap-4 border-b px-4 py-3
         ${dark ? 'border-charcoal-700 bg-charcoal-900' : 'border-charcoal-100 bg-white'}`}
@@ -66,5 +70,6 @@ export function StaffNav({
         </button>
       </form>
     </header>
+    </>
   );
 }

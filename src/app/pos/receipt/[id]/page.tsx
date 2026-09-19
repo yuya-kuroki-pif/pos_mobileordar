@@ -3,9 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { requireStore } from '@/lib/auth';
 import { PAYMENT_METHOD_LABEL, formatDateTime, formatYen } from '@/lib/format';
-import { getSession, getSessionItems, getTables } from '@/lib/queries';
-import { supabaseAdmin } from '@/lib/supabase';
-import type { Payment } from '@/lib/types';
+import { getPaymentById, getSession, getSessionItems, getTables } from '@/lib/queries';
 
 import { PrintButton } from './PrintButton';
 
@@ -16,14 +14,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const store = await requireStore();
 
-  const { data } = await supabaseAdmin()
-    .from('payments')
-    .select('*')
-    .eq('id', id)
-    .eq('store_id', store.id)
-    .maybeSingle();
-
-  const payment = data as Payment | null;
+  const payment = await getPaymentById(id, store.id);
   if (!payment) notFound();
 
   const [session, items, tables] = await Promise.all([

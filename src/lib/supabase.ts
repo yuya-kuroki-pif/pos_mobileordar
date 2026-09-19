@@ -42,3 +42,17 @@ export function isSupabaseConfigured(): boolean {
     process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
   );
 }
+
+/**
+ * デモモード（DB を使わず、サーバーのメモリ上のデータで全画面を動かす）かどうか。
+ *
+ * クローンしてすぐ画面を確認したい場合や、Supabase の用意が済んでいない段階で
+ * 動きを見たい場合に使う。データはサーバーを再起動すると初期状態に戻る。
+ *
+ * 本番で意図せず有効になると「保存したのに消える」事故になるため、
+ * 明示的な指定があるか、開発中に接続情報が無い場合に限って有効にする。
+ */
+export function isDemoMode(): boolean {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === '1') return true;
+  return process.env.NODE_ENV !== 'production' && !isSupabaseConfigured();
+}

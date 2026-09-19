@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { supabaseAdmin } from './supabase';
+import * as demo from './demo/repo';
+import { isDemoMode, supabaseAdmin } from './supabase';
 import type {
   Category,
   CategoryWithItems,
@@ -22,20 +23,33 @@ import type {
 } from './types';
 
 // ---------------------------------------------------------------------------
+// 読み取り。
+//
+// 各関数の冒頭でデモモードを判定し、その場合はインメモリの実装へ委譲する。
+// 画面側は「どちらで動いているか」を意識しなくてよい。
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
 // 店舗 / 卓
 // ---------------------------------------------------------------------------
 
 export async function getStoreBySlug(slug: string): Promise<Store | null> {
+  if (isDemoMode()) return demo.getStoreBySlug(slug);
+
   const { data } = await supabaseAdmin().from('stores').select('*').eq('slug', slug).maybeSingle();
   return (data as Store) ?? null;
 }
 
-export async function getStoreById(id: string): Promise<Store | null> {
-  const { data } = await supabaseAdmin().from('stores').select('*').eq('id', id).maybeSingle();
+export async function getStoreById(storeId: string): Promise<Store | null> {
+  if (isDemoMode()) return demo.getStoreById(storeId);
+
+  const { data } = await supabaseAdmin().from('stores').select('*').eq('id', storeId).maybeSingle();
   return (data as Store) ?? null;
 }
 
 export async function getTables(storeId: string): Promise<RestaurantTable[]> {
+  if (isDemoMode()) return demo.getTables();
+
   const { data, error } = await supabaseAdmin()
     .from('restaurant_tables')
     .select('*')
@@ -47,6 +61,8 @@ export async function getTables(storeId: string): Promise<RestaurantTable[]> {
 }
 
 export async function getTableByToken(token: string): Promise<RestaurantTable | null> {
+  if (isDemoMode()) return demo.getTableByToken(token);
+
   const { data } = await supabaseAdmin()
     .from('restaurant_tables')
     .select('*')
@@ -63,6 +79,8 @@ export async function getTableByToken(token: string): Promise<RestaurantTable | 
  * まとめて取得し、メモリ上で突き合わせる。
  */
 export async function getFloorMap(storeId: string): Promise<TableWithSession[]> {
+  if (isDemoMode()) return demo.getFloorMap();
+
   const db = supabaseAdmin();
 
   const [tablesRes, sessionsRes] = await Promise.all([
@@ -125,12 +143,14 @@ export async function getFloorMap(storeId: string): Promise<TableWithSession[]> 
  * カテゴリ > 商品 > オプショングループ > 選択肢 のツリーを組み立てる。
  * モバイルオーダーと POS の注文入力で共用する。
  *
- * @param onlyOrderable 顧客向けメニューでは売切・非公開商品を除く
+ * @param onlyOrderable 顧客向けメニューでは非公開商品を除く
  */
 export async function getMenuTree(
   storeId: string,
   onlyOrderable = true
 ): Promise<CategoryWithItems[]> {
+  if (isDemoMode()) return demo.getMenuTree(onlyOrderable);
+
   const db = supabaseAdmin();
 
   let itemQuery = db.from('menu_items').select('*').eq('store_id', storeId).order('sort_order');
@@ -187,11 +207,28 @@ export async function getMenuTree(
   }));
 }
 
+/** カテゴリ未設定の商品。管理画面で編集できるよう別に取得する */
+export async function getUncategorizedItems(storeId: string): Promise<MenuItem[]> {
+  if (isDemoMode()) return demo.getUncategorizedItems();
+
+  const { data, error } = await supabaseAdmin()
+    .from('menu_items')
+    .select('*')
+    .eq('store_id', storeId)
+    .is('category_id', null)
+    .order('sort_order');
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as MenuItem[];
+}
+
 // ---------------------------------------------------------------------------
 // セッション / 注文
 // ---------------------------------------------------------------------------
 
 export async function getSession(sessionId: string): Promise<TableSession | null> {
+  if (isDemoMode()) return demo.getSession(sessionId);
+
   const { data } = await supabaseAdmin()
     .from('table_sessions')
     .select('*')
@@ -202,6 +239,8 @@ export async function getSession(sessionId: string): Promise<TableSession | null
 
 /** 卓に現在開いているセッション。なければ null */
 export async function getOpenSessionForTable(tableId: string): Promise<TableSession | null> {
+  if (isDemoMode()) return demo.getOpenSessionForTable(tableId);
+
   const { data } = await supabaseAdmin()
     .from('table_sessions')
     .select('*')
@@ -212,6 +251,8 @@ export async function getOpenSessionForTable(tableId: string): Promise<TableSess
 }
 
 export async function getSessionItems(sessionId: string): Promise<OrderItem[]> {
+  if (isDemoMode()) return demo.getSessionItems(sessionId);
+
   const { data, error } = await supabaseAdmin()
     .from('order_items')
     .select('*')
@@ -223,6 +264,8 @@ export async function getSessionItems(sessionId: string): Promise<OrderItem[]> {
 }
 
 export async function getSessionOrders(sessionId: string): Promise<Order[]> {
+  if (isDemoMode()) return demo.getSessionOrders(sessionId);
+
   const { data, error } = await supabaseAdmin()
     .from('orders')
     .select('*')
@@ -238,6 +281,8 @@ export async function getSessionTotal(
   sessionId: string,
   discount = 0
 ): Promise<SessionTotal> {
+  if (isDemoMode()) return demo.getSessionTotal(sessionId, discount);
+
   const { data, error } = await supabaseAdmin().rpc('calc_session_total', {
     p_session_id: sessionId,
     p_discount: discount,
@@ -258,6 +303,8 @@ export async function getSessionTotal(
  * 古い注文から順に並べる（先に入った注文から作る）。
  */
 export async function getKdsItems(storeId: string): Promise<KdsItem[]> {
+  if (isDemoMode()) return demo.getKdsItems();
+
   const db = supabaseAdmin();
 
   const { data, error } = await db
@@ -298,6 +345,8 @@ export async function getSalesSummary(
   from: string,
   to: string
 ): Promise<SalesSummaryRow[]> {
+  if (isDemoMode()) return demo.getSalesSummary(from, to);
+
   const { data, error } = await supabaseAdmin().rpc('sales_summary', {
     p_store_id: storeId,
     p_from: from,
@@ -314,6 +363,8 @@ export async function getItemRanking(
   to: string,
   limit = 20
 ): Promise<ItemRankingRow[]> {
+  if (isDemoMode()) return demo.getItemRanking(from, to, limit);
+
   const { data, error } = await supabaseAdmin().rpc('item_ranking', {
     p_store_id: storeId,
     p_from: from,
@@ -330,6 +381,8 @@ export async function getPayments(
   storeId: string,
   limit = 100
 ): Promise<(Payment & { table_name: string; guest_count: number })[]> {
+  if (isDemoMode()) return demo.getPayments(limit);
+
   const { data, error } = await supabaseAdmin()
     .from('payments')
     .select(
@@ -356,11 +409,29 @@ export async function getPayments(
 }
 
 export async function getPaymentBySession(sessionId: string): Promise<Payment | null> {
+  if (isDemoMode()) return demo.getPaymentBySession(sessionId);
+
   const { data } = await supabaseAdmin()
     .from('payments')
     .select('*')
     .eq('session_id', sessionId)
     .eq('status', 'paid')
+    .maybeSingle();
+  return (data as Payment) ?? null;
+}
+
+/** レシート表示用。店舗が一致するものだけ返す */
+export async function getPaymentById(
+  paymentId: string,
+  storeId: string
+): Promise<Payment | null> {
+  if (isDemoMode()) return demo.getPaymentById(paymentId);
+
+  const { data } = await supabaseAdmin()
+    .from('payments')
+    .select('*')
+    .eq('id', paymentId)
+    .eq('store_id', storeId)
     .maybeSingle();
   return (data as Payment) ?? null;
 }

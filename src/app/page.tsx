@@ -1,9 +1,10 @@
 import Link from 'next/link';
 
+import { DemoBanner } from '@/components/DemoBanner';
 import { SetupNotice } from '@/components/SetupNotice';
 import { Card } from '@/components/ui';
 import { getStoreBySlug, getTables } from '@/lib/queries';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { isDemoMode, isSupabaseConfigured } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * 開発中や社内デモではここから辿れると確認が早い。
  */
 export default async function HomePage() {
-  if (!isSupabaseConfigured()) {
+  if (!isSupabaseConfigured() && !isDemoMode()) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-16">
         <SetupNotice />
@@ -69,7 +70,9 @@ export default async function HomePage() {
   ].filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-12 sm:py-20">
+    <>
+      <DemoBanner />
+      <main className="mx-auto max-w-4xl px-4 py-12 sm:py-20">
       <header className="mb-10">
         <p className="text-sm font-semibold tracking-wide text-ember-600">
           {storeName ?? 'セットアップ待ち'}
@@ -105,7 +108,8 @@ export default async function HomePage() {
           デモ店舗のデータが見つかりません。<code>supabase/seed.sql</code> を実行すると
           メニューと卓のサンプルが入ります。
         </p>
-      )}
-    </main>
+        )}
+      </main>
+    </>
   );
 }
