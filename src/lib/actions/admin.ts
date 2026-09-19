@@ -114,6 +114,8 @@ export async function saveMenuItem(formData: FormData): Promise<ActionResult> {
       is_available: formData.get('is_available') !== null,
       is_sold_out: formData.get('is_sold_out') !== null,
       sort_order: num(formData, 'sort_order'),
+      // 酒類・非飲食料品はチェックを外す。持ち帰りでも標準税率になる
+      reduced_rate_eligible: formData.get('reduced_rate_eligible') !== null,
     };
 
     if (isDemoMode()) {
@@ -287,12 +289,15 @@ export async function saveStoreSettings(formData: FormData): Promise<ActionResul
     const payload = {
       name: text(formData, 'name'),
       // 画面では「10」%で入力させ、DB には 0.10 で持つ
-      tax_rate: num(formData, 'tax_rate', 10) / 100,
+      standard_tax_rate: num(formData, 'standard_tax_rate', 10) / 100,
+      reduced_tax_rate: num(formData, 'reduced_tax_rate', 8) / 100,
       tax_included: text(formData, 'tax_included') === 'included',
       service_charge_rate: num(formData, 'service_charge_rate') / 100,
       mobile_order_open: formData.get('mobile_order_open') !== null,
       opening_note: text(formData, 'opening_note') || null,
       business_day_cutoff_hour: Math.min(12, Math.max(0, Math.round(num(formData, 'cutoff', 5)))),
+      invoice_registration_number: text(formData, 'invoice_registration_number') || null,
+      cash_float_default: Math.max(0, Math.round(num(formData, 'cash_float_default'))),
     };
 
     if (!payload.name) return { ok: false, error: '店舗名を入力してください。' };

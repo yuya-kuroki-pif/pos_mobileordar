@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 import { Card, Empty, PageHeader, Stat } from '@/components/ui';
 import { requireStore } from '@/lib/auth';
 import {
@@ -42,8 +44,10 @@ export default async function SalesPage({
     getPayments(store.id, 200),
   ]);
 
-  // 会計履歴は件数で絞って取っているので、表示範囲に合わせて再度フィルタする
+  // 会計履歴は件数で絞って取っているので、表示範囲に合わせて再度フィルタする。
+  // 取り消した会計は売上に含めないため、ここでも除いて別枠に出す
   const inRange = payments.filter((payment) => {
+    if (payment.status !== 'paid') return false;
     const day = businessDate(
       new Date(payment.paid_at),
       store.timezone,
@@ -51,6 +55,8 @@ export default async function SalesPage({
     );
     return day >= from && day <= to;
   });
+
+  const voided = payments.filter((payment) => payment.status === 'refunded');
 
   const totals = summary.reduce(
     (acc, row) => ({
@@ -151,7 +157,12 @@ export default async function SalesPage({
         </section>
 
         <section>
-          <h2 className="mb-3 text-lg font-bold">会計履歴</h2>
+          <h2 className="mb-3 text-lg font-bold">
+            会計履歴
+            <span className="ml-2 text-xs font-normal text-charcoal-400">
+              クリックでレシートを表示
+            </span>
+          </h2>
           <Card className="max-h-[600px] divide-y divide-charcoal-50 overflow-y-auto">
             {inRange.length === 0 ? (
               <div className="p-5">
@@ -159,13 +170,22 @@ export default async function SalesPage({
               </div>
             ) : (
               inRange.map((payment) => (
-                <div key={payment.id} className="flex items-center gap-3 px-5 py-2.5">
+                <Link
+                  key={payment.id}
+                  href={`/pos/receipt/${payment.id}`}
+                  className="flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-charcoal-50"
+                >
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">
                       {payment.table_name}
                       <span className="ml-2 text-xs text-charcoal-400">
                         {payment.guest_count}名
                       </span>
+                      {payment.split_count > 1 && (
+                        <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-[11px] font-bold text-sky-800">
+                          分割 {payment.split_index}/{payment.split_count}
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-charcoal-400">
                       {formatDateTime(payment.paid_at)} ・ {PAYMENT_METHOD_LABEL[payment.method]}
@@ -173,12 +193,41 @@ export default async function SalesPage({
                     </p>
                   </div>
                   <span className="tabular font-semibold">{formatYen(payment.total)}</span>
-                </div>
+                </Link>
               ))
             )}
           </Card>
         </section>
       </div>
+
+      {voided.length > 0 && (
+        <section className="mt-8">
+          <h2 className="mb-3 text-lg font-bold">取り消した会計</h2>
+          <p className="mb-3 text-sm text-charcoal-500">
+            売上には含まれていません。記録として残しています。
+          </p>
+          <Card className="divide-y divide-charcoal-50">
+            {voided.map((payment) => (
+              <Link
+                key={payment.id}
+                href={`/pos/receipt/${payment.id}`}
+                className="flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-charcoal-50"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{payment.table_name}</p>
+                  <p className="text-xs text-charcoal-400">
+                    {formatDateTime(payment.paid_at)}
+                    {payment.void_reason && ` ・ ${payment.void_reason}`}
+                  </p>
+                </div>
+                <span className="tabular font-semibold text-charcoal-400 line-through">
+                  {formatYen(payment.total)}
+                </span>
+              </Link>
+            ))}
+          </Card>
+        </section>
+      )}
     </>
   );
 }

@@ -2,6 +2,9 @@ import 'server-only';
 
 import { businessDate } from '../format';
 import type {
+  CashDrawerClosing,
+  CashMovement,
+  CashMovementKind,
   Category,
   CategoryWithItems,
   ItemRankingRow,
@@ -19,10 +22,12 @@ import type {
   RestaurantTable,
   SalesSummaryRow,
   SelectedOption,
+  ServiceType,
   SessionTotal,
   Store,
   TableSession,
   TableWithSession,
+  TaxBreakdownRow,
 } from '../types';
 import { createDemoState, type DemoState } from './data';
 
@@ -176,28 +181,81 @@ export function getSessionOrders(sessionId: string): Order[] {
   );
 }
 
-export function getSessionTotal(sessionId: string, discount = 0): SessionTotal {
+/**
+ * 会計金額の計算。SQL の calc_session_total と同じ手順を踏む。
+ *   1. 税率ごとに合算 → 2. サービス料を標準税率へ加算
+ *   → 3. 割引を金額按分（端数は最後のグループ） → 4. 税率ごとに消費税
+ */
+export function getSessionTotal(
+  sessionId: string,
+  discount = 0,
+  onlyUnpaid = true,
+  itemIds: string[] | null = null
+): SessionTotal {
   const state = db();
+  const store = state.store;
 
-  const subtotal = state.orderItems
-    .filter((i) => i.session_id === sessionId && i.status !== 'cancelled')
-    .reduce((sum, i) => sum + i.line_total, 0);
+  const items = state.orderItems.filter(
+    (i) =>
+      i.session_id === sessionId &&
+      i.status !== 'cancelled' &&
+      (!onlyUnpaid || i.payment_id === null) &&
+      (itemIds === null || itemIds.includes(i.id))
+  );
 
-  const serviceCharge = Math.round(subtotal * state.store.service_charge_rate);
-  const appliedDiscount = Math.max(discount, 0);
-  const base = Math.max(subtotal + serviceCharge - appliedDiscount, 0);
-  const rate = state.store.tax_rate;
+  const subtotal = items.reduce((sum, i) => sum + i.line_total, 0);
+  const serviceCharge = Math.round(subtotal * store.service_charge_rate);
 
-  const tax = state.store.tax_included
-    ? Math.round((base * rate) / (1 + rate))
-    : Math.round(base * rate);
+  // 税率ごとに合算し、サービス料は標準税率のグループへ寄せる
+  const byRate = new Map<number, number>();
+  for (const item of items) {
+    byRate.set(item.tax_rate, (byRate.get(item.tax_rate) ?? 0) + item.line_total);
+  }
+  if (serviceCharge > 0) {
+    byRate.set(
+      store.standard_tax_rate,
+      (byRate.get(store.standard_tax_rate) ?? 0) + serviceCharge
+    );
+  }
+
+  // 割引は税率の昇順に按分し、端数は最後のグループが負担する
+  const groups = [...byRate.entries()].sort((a, b) => a[0] - b[0]);
+  const gross = groups.reduce((sum, [, amount]) => sum + amount, 0);
+  const appliedDiscount = Math.min(Math.max(discount, 0), gross);
+
+  let allocated = 0;
+  const breakdown: TaxBreakdownRow[] = [];
+
+  groups.forEach(([rate, amount], index) => {
+    const isLast = index === groups.length - 1;
+    const share = gross === 0 ? 0 : Math.floor((appliedDiscount * amount) / gross);
+    const actualShare = isLast ? appliedDiscount - allocated : share;
+    allocated += share;
+
+    const base = Math.max(amount - actualShare, 0);
+    if (base <= 0) return;
+
+    breakdown.push({
+      rate,
+      taxable: base,
+      tax: store.tax_included
+        ? Math.round((base * rate) / (1 + rate))
+        : Math.round(base * rate),
+    });
+  });
+
+  breakdown.sort((a, b) => b.rate - a.rate);
+
+  const tax = breakdown.reduce((sum, b) => sum + b.tax, 0);
+  const taxableTotal = breakdown.reduce((sum, b) => sum + b.taxable, 0);
 
   return {
     subtotal,
     service_charge: serviceCharge,
-    discount: Math.min(appliedDiscount, subtotal + serviceCharge),
+    discount: appliedDiscount,
     tax,
-    total: state.store.tax_included ? base : base + tax,
+    total: store.tax_included ? taxableTotal : taxableTotal + tax,
+    tax_breakdown: breakdown,
   };
 }
 
@@ -330,7 +388,11 @@ export function verifyPin(slug: string, pin: string): string | null {
   return state.store.slug === slug && pin === DEMO_PIN ? state.store.id : null;
 }
 
-export function openTableSession(tableId: string, guestCount: number): string {
+export function openTableSession(
+  tableId: string,
+  guestCount: number,
+  serviceType: ServiceType = 'eat_in'
+): string {
   const state = db();
 
   const table = state.tables.find((t) => t.id === tableId && t.is_active);
@@ -347,6 +409,7 @@ export function openTableSession(tableId: string, guestCount: number): string {
     table_id: tableId,
     guest_count: Math.max(1, Math.floor(guestCount)),
     status: 'open',
+    service_type: serviceType,
     opened_at: nowIso(),
     closed_at: null,
     note: null,
@@ -365,7 +428,8 @@ export interface DemoOrderLine {
 export function placeOrder(
   sessionId: string,
   channel: OrderChannel,
-  lines: DemoOrderLine[]
+  lines: DemoOrderLine[],
+  serviceType: ServiceType | null = null
 ): string {
   const state = db();
 
@@ -389,6 +453,8 @@ export function placeOrder(
     )
     .reduce((max, o) => Math.max(max, o.order_number), 0);
 
+  const effectiveServiceType = serviceType ?? session.service_type;
+
   const placedAt = nowIso();
   const order: Order = {
     id: id('ord'),
@@ -396,6 +462,7 @@ export function placeOrder(
     session_id: sessionId,
     order_number: todaysMax + 1,
     channel,
+    service_type: effectiveServiceType,
     note: null,
     placed_at: placedAt,
   };
@@ -435,13 +502,18 @@ export function placeOrder(
       options_price: optionsPrice,
       options_snapshot: selected,
       quantity,
-      tax_rate: menuItem.tax_rate ?? state.store.tax_rate,
+      // 持ち帰りの飲食料品だけが軽減税率。酒類・非飲食料品は標準税率のまま
+      tax_rate:
+        effectiveServiceType === 'takeout' && menuItem.reduced_rate_eligible
+          ? state.store.reduced_tax_rate
+          : state.store.standard_tax_rate,
       prep_station: menuItem.prep_station,
       status: 'pending',
       note: line.note?.trim() || null,
       created_at: placedAt,
       updated_at: placedAt,
       line_total: (menuItem.price + optionsPrice) * quantity,
+      payment_id: null,
     });
   }
 
@@ -473,6 +545,12 @@ export function requestBill(sessionId: string): void {
   if (session?.status === 'open') session.status = 'bill_requested';
 }
 
+/** 提供形態の切り替え（店内 ⇔ 持ち帰り） */
+export function updateServiceType(sessionId: string, serviceType: ServiceType): void {
+  const session = db().sessions.find((s) => s.id === sessionId);
+  if (session) session.service_type = serviceType;
+}
+
 export function updateGuestCount(sessionId: string, guestCount: number): void {
   const session = db().sessions.find((s) => s.id === sessionId);
   if (session) session.guest_count = Math.max(1, Math.floor(guestCount));
@@ -492,54 +570,280 @@ export function cancelSession(sessionId: string): void {
   session.closed_at = nowIso();
 }
 
-export function checkoutSession(
+/**
+ * 会計する。
+ *   itemIds 指定    → その明細だけを会計する（明細指定の分割）
+ *   splitCount > 1  → 未会計分を等分する（人数割り）。端数は 1 人目が負担
+ *   どちらもなし    → 未会計分をすべて会計する
+ */
+export function checkoutPayment(
   sessionId: string,
   method: PaymentMethod,
   discount: number,
-  received: number
+  received: number,
+  options: { itemIds?: string[] | null; splitCount?: number; splitIndex?: number } = {}
 ): string {
   const state = db();
+  const itemIds = options.itemIds ?? null;
+  const splitCount = Math.max(1, options.splitCount ?? 1);
+  const splitIndex = Math.max(1, options.splitIndex ?? 1);
 
   const session = state.sessions.find((s) => s.id === sessionId);
   if (!session) throw new Error('対象の卓が見つかりません。');
-  if (session.status === 'closed') throw new Error('この卓はすでに会計済みです');
+  if (session.status === 'closed' || session.status === 'cancelled' || session.status === 'merged') {
+    throw new Error('この卓はすでに会計済みです');
+  }
+  if (splitCount > 1 && itemIds) {
+    throw new Error('明細指定と人数割りは同時に使えません');
+  }
+  if (splitIndex > splitCount) throw new Error('分割の指定が不正です');
 
-  const calc = getSessionTotal(sessionId, discount);
-
-  if (method === 'cash' && received < calc.total) {
-    throw new Error(`預かり金が不足しています（合計 ${calc.total}円 / 預かり ${received}円）`);
+  const calc = getSessionTotal(sessionId, discount, true, itemIds);
+  if (calc.total === 0 && calc.subtotal === 0) {
+    throw new Error('会計対象の明細がありません');
   }
 
-  const payment: Payment = {
-    id: id('pay'),
+  // 人数割りは端数を 1 人目が負担する
+  let amount = calc.total;
+  if (splitCount > 1) {
+    const share = Math.floor(calc.total / splitCount);
+    amount = splitIndex === 1 ? share + (calc.total - share * splitCount) : share;
+  }
+  const ratio = calc.total === 0 ? 0 : amount / calc.total;
+
+  if (method === 'cash' && received < amount) {
+    throw new Error('預かり金が不足しています（合計 ' + amount + '円 / 預かり ' + received + '円）');
+  }
+
+  const paymentId = id('pay');
+  state.payments.push({
+    id: paymentId,
     store_id: state.store.id,
     session_id: sessionId,
     method,
-    subtotal: calc.subtotal,
-    discount: calc.discount,
-    service_charge: calc.service_charge,
-    tax: calc.tax,
-    total: calc.total,
-    received: method === 'cash' ? received : calc.total,
-    change_due: method === 'cash' ? received - calc.total : 0,
+    subtotal: Math.round(calc.subtotal * ratio),
+    discount: Math.round(calc.discount * ratio),
+    service_charge: Math.round(calc.service_charge * ratio),
+    tax: Math.round(calc.tax * ratio),
+    total: amount,
+    received: method === 'cash' ? received : amount,
+    change_due: method === 'cash' ? received - amount : 0,
     status: 'paid',
     note: null,
     paid_at: nowIso(),
-  };
-  state.payments.push(payment);
+    tax_breakdown: calc.tax_breakdown.map((b) => ({
+      rate: b.rate,
+      taxable: Math.round(b.taxable * ratio),
+      tax: Math.round(b.tax * ratio),
+    })),
+    split_count: splitCount,
+    split_index: splitIndex,
+    voided_at: null,
+    void_reason: null,
+  });
 
-  // 未提供のまま残った明細は提供済みに倒す
+  // 明細への紐付け。人数割りでは最後の 1 回でまとめて紐付ける
+  const isLast = splitIndex >= splitCount;
   for (const item of state.orderItems) {
     if (item.session_id !== sessionId) continue;
-    if (item.status === 'pending' || item.status === 'cooking' || item.status === 'ready') {
-      item.status = 'served';
+    if (item.payment_id !== null || item.status === 'cancelled') continue;
+    if (itemIds ? itemIds.includes(item.id) : isLast) {
+      item.payment_id = paymentId;
     }
   }
 
-  session.status = 'closed';
-  session.closed_at = nowIso();
+  // 未会計が残っていなければ卓を閉じる
+  const remaining = state.orderItems.filter(
+    (i) => i.session_id === sessionId && i.payment_id === null && i.status !== 'cancelled'
+  );
 
-  return payment.id;
+  if (remaining.length === 0) {
+    for (const item of state.orderItems) {
+      if (item.session_id !== sessionId) continue;
+      if (item.status === 'pending' || item.status === 'cooking' || item.status === 'ready') {
+        item.status = 'served';
+      }
+    }
+    session.status = 'closed';
+    session.closed_at = nowIso();
+  }
+
+  return paymentId;
+}
+
+/** 会計を取り消す。明細の紐付けを外し、卓を開け直す */
+export function voidPayment(paymentId: string, reason: string): void {
+  const state = db();
+
+  const payment = state.payments.find((p) => p.id === paymentId);
+  if (!payment) throw new Error('会計が見つかりません');
+  if (payment.status === 'refunded') throw new Error('この会計はすでに取り消されています');
+
+  // 記録は消さず、取消として残す（売上集計は status = 'paid' だけを見る）
+  payment.status = 'refunded';
+  payment.voided_at = nowIso();
+  payment.void_reason = reason;
+
+  for (const item of state.orderItems) {
+    if (item.payment_id === paymentId) item.payment_id = null;
+  }
+
+  // 未会計の明細が残ったなら卓を開け直す。
+  // 「他に有効な会計が残っているか」で判定すると、分割会計の一部だけを
+  // 取り消したときに卓が閉じたままになり、残額を再会計できなくなる。
+  const hasUnpaid = state.orderItems.some(
+    (i) => i.session_id === payment.session_id && i.payment_id === null && i.status !== 'cancelled'
+  );
+  if (hasUnpaid) {
+    const session = state.sessions.find((s) => s.id === payment.session_id);
+    if (session) {
+      session.status = 'open';
+      session.closed_at = null;
+    }
+  }
+}
+
+/** 卓移動 */
+export function moveSession(sessionId: string, toTableId: string): void {
+  const state = db();
+
+  const session = state.sessions.find((s) => s.id === sessionId);
+  if (!session) throw new Error('対象の卓が見つかりません');
+  if (session.status !== 'open' && session.status !== 'bill_requested') {
+    throw new Error('利用中の卓のみ移動できます');
+  }
+
+  const table = state.tables.find((t) => t.id === toTableId && t.is_active);
+  if (!table) throw new Error('移動先の卓が見つかりません');
+
+  const occupied = state.sessions.some(
+    (s) => s.table_id === toTableId && (s.status === 'open' || s.status === 'bill_requested')
+  );
+  if (occupied) throw new Error('移動先の卓は使用中です。先に伝票を結合してください');
+
+  session.table_id = toTableId;
+}
+
+/** 伝票結合。source を target に吸収する */
+export function mergeSessions(sourceId: string, targetId: string): void {
+  const state = db();
+
+  if (sourceId === targetId) throw new Error('同じ伝票は結合できません');
+
+  const source = state.sessions.find((s) => s.id === sourceId);
+  const target = state.sessions.find((s) => s.id === targetId);
+  if (!source || !target) throw new Error('対象の伝票が見つかりません');
+
+  const isOpen = (s: TableSession) => s.status === 'open' || s.status === 'bill_requested';
+  if (!isOpen(source) || !isOpen(target)) throw new Error('利用中の伝票のみ結合できます');
+
+  if (state.payments.some((p) => p.session_id === sourceId && p.status === 'paid')) {
+    throw new Error('会計済みの伝票は結合できません');
+  }
+
+  for (const order of state.orders) {
+    if (order.session_id === sourceId) order.session_id = targetId;
+  }
+  for (const item of state.orderItems) {
+    if (item.session_id === sourceId) item.session_id = targetId;
+  }
+
+  // 人数は合算する
+  target.guest_count += source.guest_count;
+  source.status = 'merged';
+  source.closed_at = nowIso();
+}
+
+// ---------------------------------------------------------------------------
+// 現金在高・レジ締め
+// ---------------------------------------------------------------------------
+
+export function getCashMovements(businessDay: string): CashMovement[] {
+  return clone(db().cashMovements.filter((m) => m.business_day === businessDay)).sort((a, b) =>
+    a.created_at.localeCompare(b.created_at)
+  );
+}
+
+export function addCashMovement(
+  businessDay: string,
+  kind: CashMovementKind,
+  amount: number,
+  reason: string | null
+): void {
+  const state = db();
+  state.cashMovements.push({
+    id: id('cm'),
+    store_id: state.store.id,
+    business_day: businessDay,
+    kind,
+    amount: Math.max(1, Math.floor(amount)),
+    reason,
+    created_at: nowIso(),
+  });
+}
+
+export function getCashClosing(businessDay: string): CashDrawerClosing | null {
+  const closing = db().cashClosings.find((c) => c.business_day === businessDay);
+  return closing ? clone(closing) : null;
+}
+
+/** 現金売上。取り消された会計は含めない */
+export function getCashSales(businessDay: string): number {
+  const state = db();
+  const store = state.store;
+
+  return state.payments
+    .filter(
+      (p) =>
+        p.status === 'paid' &&
+        p.method === 'cash' &&
+        businessDate(new Date(p.paid_at), store.timezone, store.business_day_cutoff_hour) ===
+          businessDay
+    )
+    .reduce((sum, p) => sum + p.total, 0);
+}
+
+/** レジ締め。理論在高 = 釣銭準備金 + 現金売上 + 入金 - 出金 */
+export function closeCashDrawer(
+  businessDay: string,
+  openingFloat: number,
+  countedCash: number,
+  note: string | null
+): string {
+  const state = db();
+
+  const cashSales = getCashSales(businessDay);
+  const movements = state.cashMovements.filter((m) => m.business_day === businessDay);
+  const cashIn = movements
+    .filter((m) => m.kind === 'deposit')
+    .reduce((sum, m) => sum + m.amount, 0);
+  const cashOut = movements
+    .filter((m) => m.kind === 'withdrawal')
+    .reduce((sum, m) => sum + m.amount, 0);
+
+  const expected = openingFloat + cashSales + cashIn - cashOut;
+
+  const row: CashDrawerClosing = {
+    id: id('cdc'),
+    store_id: state.store.id,
+    business_day: businessDay,
+    opening_float: openingFloat,
+    cash_sales: cashSales,
+    cash_in: cashIn,
+    cash_out: cashOut,
+    expected_cash: expected,
+    counted_cash: countedCash,
+    difference: countedCash - expected,
+    note,
+    closed_at: nowIso(),
+  };
+
+  // 1 営業日 1 回。すでにあれば上書きする
+  const index = state.cashClosings.findIndex((c) => c.business_day === businessDay);
+  if (index === -1) state.cashClosings.push(row);
+  else state.cashClosings[index] = { ...row, id: state.cashClosings[index].id };
+
+  return row.id;
 }
 
 // ---------------------------------------------------------------------------
@@ -592,6 +896,7 @@ export function saveMenuItem(input: {
   is_available: boolean;
   is_sold_out: boolean;
   sort_order: number;
+  reduced_rate_eligible: boolean;
 }): void {
   const state = db();
   const existing = state.menuItems.find((m) => m.id === input.id);
@@ -605,7 +910,6 @@ export function saveMenuItem(input: {
     ...input,
     id: id('item'),
     store_id: state.store.id,
-    tax_rate: null,
     created_at: nowIso(),
     updated_at: nowIso(),
   } satisfies MenuItem);
@@ -671,12 +975,15 @@ export function regenerateQrToken(tableId: string): string {
 
 export function saveStoreSettings(input: {
   name: string;
-  tax_rate: number;
+  standard_tax_rate: number;
+  reduced_tax_rate: number;
   tax_included: boolean;
   service_charge_rate: number;
   mobile_order_open: boolean;
   opening_note: string | null;
   business_day_cutoff_hour: number;
+  invoice_registration_number: string | null;
+  cash_float_default: number;
 }): void {
   Object.assign(db().store, input, { updated_at: nowIso() });
 }

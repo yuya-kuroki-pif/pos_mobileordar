@@ -2,10 +2,16 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { requireStore } from '@/lib/auth';
-import { PAYMENT_METHOD_LABEL, formatDateTime, formatYen } from '@/lib/format';
+import {
+  PAYMENT_METHOD_LABEL,
+  SERVICE_TYPE_LABEL,
+  formatDateTime,
+  formatTaxRate,
+  formatYen,
+} from '@/lib/format';
 import { getPaymentById, getSession, getSessionItems, getTables } from '@/lib/queries';
 
-import { PrintButton } from './PrintButton';
+import { ReceiptActions } from './ReceiptActions';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'レシート' };
@@ -24,33 +30,59 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   ]);
 
   const table = tables.find((t) => t.id === session?.table_id);
-  const billed = items.filter((item) => item.status !== 'cancelled');
+
+  // この会計に紐づく明細だけを載せる（分割会計では一部だけになる）
+  const billed = items.filter((item) => item.payment_id === payment.id);
+  // 人数割りは明細が最後の 1 回にまとまるので、その場合は伝票全体を参考表示する
+  const lines = billed.length > 0 ? billed : items.filter((i) => i.status !== 'cancelled');
+
+  const hasReduced = payment.tax_breakdown.some((row) => row.rate < store.standard_tax_rate);
+  const voided = payment.status === 'refunded';
 
   return (
     <main className="min-h-screen bg-charcoal-100 px-4 py-8">
       <div className="mx-auto max-w-sm">
+        {voided && (
+          <p className="no-print mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            この会計は取り消されています
+            {payment.void_reason && <span className="block font-normal">理由: {payment.void_reason}</span>}
+          </p>
+        )}
+
         {/* レシート本体。印刷時はこの部分だけが残る */}
         <div className="rounded-lg bg-white px-6 py-8 shadow-lg">
           <div className="text-center">
             <h1 className="text-lg font-bold">{store.name}</h1>
             <p className="mt-1 text-xs text-charcoal-500">領収書</p>
+            {store.invoice_registration_number && (
+              <p className="tabular mt-1 text-[11px] text-charcoal-500">
+                登録番号 {store.invoice_registration_number}
+              </p>
+            )}
           </div>
 
           <div className="mt-5 space-y-0.5 border-y border-dashed border-charcoal-200 py-3 text-xs text-charcoal-600">
             <p>{formatDateTime(payment.paid_at)}</p>
             <p>
               {table?.name ?? '-'} / {session?.guest_count ?? 0} 名
+              {session && ` / ${SERVICE_TYPE_LABEL[session.service_type]}`}
             </p>
+            {payment.split_count > 1 && (
+              <p className="font-semibold">
+                {payment.split_count} 名で分割（{payment.split_index} 人目）
+              </p>
+            )}
           </div>
 
           <ul className="mt-4 space-y-2 text-sm">
-            {billed.map((item) => (
+            {lines.map((item) => (
               <li key={item.id}>
                 <div className="flex justify-between gap-2">
-                  <span className="min-w-0 flex-1">{item.name_snapshot}</span>
-                  <span className="tabular w-8 text-right text-charcoal-500">
-                    {item.quantity}
+                  <span className="min-w-0 flex-1">
+                    {item.tax_rate < store.standard_tax_rate && '※'}
+                    {item.name_snapshot}
                   </span>
+                  <span className="tabular w-8 text-right text-charcoal-500">{item.quantity}</span>
                   <span className="tabular w-20 text-right">{formatYen(item.line_total)}</span>
                 </div>
                 {item.options_snapshot.length > 0 && (
@@ -70,25 +102,53 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
             {payment.discount > 0 && (
               <ReceiptRow label="割引" value={`-${formatYen(payment.discount)}`} />
             )}
-            <ReceiptRow label="（内 消費税）" value={formatYen(payment.tax)} muted />
 
             <div className="flex items-baseline justify-between border-t border-charcoal-200 pt-2">
               <span className="font-bold">合計</span>
               <span className="tabular text-xl font-bold">{formatYen(payment.total)}</span>
             </div>
 
-            <ReceiptRow label="支払方法" value={PAYMENT_METHOD_LABEL[payment.method]} />
-            {payment.method === 'cash' && (
-              <>
-                <ReceiptRow label="お預かり" value={formatYen(payment.received)} />
-                <ReceiptRow label="おつり" value={formatYen(payment.change_due)} />
-              </>
-            )}
+            {/* 税率ごとの対象額と消費税額。インボイスの記載要件 */}
+            <div className="mt-2 space-y-0.5 border-t border-dashed border-charcoal-200 pt-2 text-xs">
+              {payment.tax_breakdown.map((row) => (
+                <div key={row.rate} className="flex justify-between">
+                  <span>
+                    {formatTaxRate(row.rate)}
+                    {row.rate < store.standard_tax_rate && '（軽減）'}対象
+                  </span>
+                  <span className="tabular">
+                    {formatYen(row.taxable)}
+                    <span className="ml-2 text-charcoal-500">
+                      {store.tax_included ? '内税' : '税'} {formatYen(row.tax)}
+                    </span>
+                  </span>
+                </div>
+              ))}
+              {payment.tax_breakdown.length === 0 && (
+                <ReceiptRow
+                  label={store.tax_included ? '（内 消費税）' : '消費税'}
+                  value={formatYen(payment.tax)}
+                  muted
+                />
+              )}
+            </div>
+
+            <div className="mt-2 border-t border-dashed border-charcoal-200 pt-2">
+              <ReceiptRow label="支払方法" value={PAYMENT_METHOD_LABEL[payment.method]} />
+              {payment.method === 'cash' && (
+                <>
+                  <ReceiptRow label="お預かり" value={formatYen(payment.received)} />
+                  <ReceiptRow label="おつり" value={formatYen(payment.change_due)} />
+                </>
+              )}
+            </div>
           </div>
 
-          <p className="mt-6 text-center text-[11px] text-charcoal-400">
-            ありがとうございました
-          </p>
+          {hasReduced && (
+            <p className="mt-4 text-[11px] text-charcoal-500">※ は軽減税率（8%）対象</p>
+          )}
+
+          <p className="mt-6 text-center text-[11px] text-charcoal-400">ありがとうございました</p>
         </div>
 
         <div className="no-print mt-6 flex gap-2">
@@ -98,7 +158,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
           >
             フロアへ戻る
           </Link>
-          <PrintButton />
+          <ReceiptActions paymentId={payment.id} voided={voided} />
         </div>
       </div>
     </main>

@@ -5,8 +5,8 @@ import { useMemo, useState, useTransition } from 'react';
 
 import { Button } from '@/components/ui';
 import { openTable } from '@/lib/actions/order';
-import { elapsedLabel, formatYen } from '@/lib/format';
-import type { TableWithSession } from '@/lib/types';
+import { SERVICE_TYPE_LABEL, elapsedLabel, formatYen } from '@/lib/format';
+import type { ServiceType, TableWithSession } from '@/lib/types';
 import { useLiveData, useTicker } from '@/lib/useLiveData';
 
 export function FloorMap({ initialTables }: { initialTables: TableWithSession[] }) {
@@ -183,12 +183,13 @@ function GuestCountDialog({
   onOpened: (sessionId: string) => void;
 }) {
   const [count, setCount] = useState(Math.min(2, table.seats));
+  const [serviceType, setServiceType] = useState<ServiceType>('eat_in');
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function submit() {
     startTransition(async () => {
-      const result = await openTable(table.id, count);
+      const result = await openTable(table.id, count, serviceType);
       if (result.ok && result.id) onOpened(result.id);
       else setError(result.error ?? '卓を開けませんでした。');
     });
@@ -207,9 +208,34 @@ function GuestCountDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold">{table.name} を開ける</h2>
-        <p className="mt-1 text-sm text-charcoal-500">人数を選んでください</p>
 
-        <div className="no-select mt-4 grid grid-cols-4 gap-2">
+        {/* 提供形態。持ち帰りだと飲食料品が軽減税率 8% になる */}
+        <div className="no-select mt-4">
+          <p className="mb-2 text-sm text-charcoal-500">提供形態</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(['eat_in', 'takeout'] as const).map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setServiceType(type)}
+                className={`rounded-xl border-2 py-3 text-sm font-bold transition-colors ${
+                  serviceType === type
+                    ? 'border-ember-500 bg-ember-50 text-ember-700'
+                    : 'border-charcoal-100 bg-white text-charcoal-600'
+                }`}
+              >
+                {SERVICE_TYPE_LABEL[type]}
+                {type === 'takeout' && (
+                  <span className="mt-0.5 block text-[11px] font-normal">軽減税率 8%</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <p className="mt-4 text-sm text-charcoal-500">人数を選んでください</p>
+
+        <div className="no-select mt-2 grid grid-cols-4 gap-2">
           {choices.map((n) => (
             <button
               key={n}

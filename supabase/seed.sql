@@ -24,15 +24,22 @@ begin
   -- -------------------------------------------------------------------------
   -- 店舗
   -- -------------------------------------------------------------------------
-  insert into public.stores (slug, name, tax_rate, tax_included, service_charge_rate, staff_pin_hash, opening_note)
+  insert into public.stores (
+    slug, name, standard_tax_rate, reduced_tax_rate, tax_included,
+    service_charge_rate, staff_pin_hash, opening_note,
+    invoice_registration_number, cash_float_default
+  )
   values (
     'demo',
     '炭火焼き デモ店',
-    0.1000,
+    0.1000,   -- 標準税率（店内飲食）
+    0.0800,   -- 軽減税率（持ち帰りの飲食料品）
     true,
     0.0000,
     crypt('1234', gen_salt('bf')),
-    'ご来店ありがとうございます。ラストオーダーは 23:00 です。'
+    'ご来店ありがとうございます。ラストオーダーは 23:00 です。',
+    'T1234567890123',  -- デモ用のダミー登録番号
+    30000              -- 釣銭準備金の既定値
   )
   returning id into v_store_id;
 
@@ -139,17 +146,18 @@ begin
     (v_store_id, v_cat_ippin, '冷やしトマト',   null,                    420, 'kitchen', 50);
 
   -- ドリンク（サイズオプション付き）
-  insert into public.menu_items (store_id, category_id, name, description, price, prep_station, sort_order)
-    values (v_store_id, v_cat_drink, '生ビール', 'アサヒスーパードライ', 580, 'bar', 10)
+  -- 酒類は持ち帰りでも軽減税率の対象外。reduced_rate_eligible = false にする
+  insert into public.menu_items (store_id, category_id, name, description, price, prep_station, sort_order, reduced_rate_eligible)
+    values (v_store_id, v_cat_drink, '生ビール', 'アサヒスーパードライ', 580, 'bar', 10, false)
     returning id into v_item;
   insert into public.menu_item_option_groups values (v_item, v_grp_size, 10);
 
-  insert into public.menu_items (store_id, category_id, name, description, price, prep_station, sort_order) values
-    (v_store_id, v_cat_drink, 'ハイボール',     '角ハイボール',      480, 'bar', 20),
-    (v_store_id, v_cat_drink, 'レモンサワー',   '自家製レモンシロップ', 480, 'bar', 30),
-    (v_store_id, v_cat_drink, '日本酒（冷）',   '本日のおすすめ一合',  780, 'bar', 40),
-    (v_store_id, v_cat_drink, '烏龍茶',         null,                 350, 'bar', 50),
-    (v_store_id, v_cat_drink, 'コーラ',         null,                 350, 'bar', 60);
+  insert into public.menu_items (store_id, category_id, name, description, price, prep_station, sort_order, reduced_rate_eligible) values
+    (v_store_id, v_cat_drink, 'ハイボール',     '角ハイボール',        480, 'bar', 20, false),
+    (v_store_id, v_cat_drink, 'レモンサワー',   '自家製レモンシロップ', 480, 'bar', 30, false),
+    (v_store_id, v_cat_drink, '日本酒（冷）',   '本日のおすすめ一合',   780, 'bar', 40, false),
+    (v_store_id, v_cat_drink, '烏龍茶',         null,                  350, 'bar', 50, true),
+    (v_store_id, v_cat_drink, 'コーラ',         null,                  350, 'bar', 60, true);
 
   -- デザート
   insert into public.menu_items (store_id, category_id, name, description, price, prep_station, sort_order) values

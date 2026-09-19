@@ -319,6 +319,15 @@ function ItemDialog({
           <Checkbox name="is_sold_out" defaultChecked={draft.is_sold_out ?? false}>
             本日売切
           </Checkbox>
+          <Checkbox
+            name="reduced_rate_eligible"
+            defaultChecked={draft.reduced_rate_eligible ?? true}
+          >
+            持ち帰りなら軽減税率 8%
+          </Checkbox>
+          <p className="pl-7 text-xs text-charcoal-400">
+            酒類・非飲食料品はチェックを外してください。持ち帰りでも標準税率になります。
+          </p>
         </div>
 
         {error && (

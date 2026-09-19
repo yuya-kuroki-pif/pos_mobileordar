@@ -1,4 +1,11 @@
-import type { OrderItemStatus, PaymentMethod, PrepStation, SessionStatus } from './types';
+import type {
+  CashMovementKind,
+  OrderItemStatus,
+  PaymentMethod,
+  PrepStation,
+  ServiceType,
+  SessionStatus,
+} from './types';
 
 const yen = new Intl.NumberFormat('ja-JP');
 
@@ -64,7 +71,32 @@ export const SESSION_STATUS_LABEL: Record<SessionStatus, string> = {
   bill_requested: 'お会計希望',
   closed: '会計済み',
   cancelled: '取消',
+  merged: '結合済み',
 };
+
+export const SERVICE_TYPE_LABEL: Record<ServiceType, string> = {
+  eat_in: '店内',
+  takeout: '持ち帰り',
+};
+
+export const CASH_MOVEMENT_LABEL: Record<CashMovementKind, string> = {
+  deposit: '入金',
+  withdrawal: '出金',
+};
+
+/** 0.08 -> "8%" */
+export function formatTaxRate(rate: number): string {
+  const percent = rate * 100;
+  return `${Number.isInteger(percent) ? percent : percent.toFixed(1)}%`;
+}
+
+/**
+ * 軽減税率対象かどうか。
+ * レシートでは税率ごとに区別できる必要があるため、8% の行に印を付ける。
+ */
+export function isReducedRate(rate: number, standardRate: number): boolean {
+  return rate < standardRate;
+}
 
 export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   cash: '現金',

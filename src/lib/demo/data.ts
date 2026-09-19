@@ -1,4 +1,6 @@
 import type {
+  CashDrawerClosing,
+  CashMovement,
   Category,
   MenuItem,
   MenuOption,
@@ -8,6 +10,7 @@ import type {
   Payment,
   PrepStation,
   RestaurantTable,
+  ServiceType,
   Store,
   TableSession,
 } from '../types';
@@ -31,6 +34,8 @@ export interface DemoState {
   orders: Order[];
   orderItems: OrderItem[];
   payments: Payment[];
+  cashMovements: CashMovement[];
+  cashClosings: CashDrawerClosing[];
 }
 
 const STORE_ID = 'demo-store';
@@ -47,7 +52,8 @@ export function createDemoState(): DemoState {
     id: STORE_ID,
     slug: 'demo',
     name: '炭火焼き デモ店',
-    tax_rate: 0.1,
+    standard_tax_rate: 0.1,
+    reduced_tax_rate: 0.08,
     tax_included: true,
     service_charge_rate: 0,
     staff_pin_hash: null, // デモでは PIN を固定値で判定するのでハッシュは持たない
@@ -55,6 +61,8 @@ export function createDemoState(): DemoState {
     opening_note: 'ご来店ありがとうございます。ラストオーダーは 23:00 です。',
     business_day_cutoff_hour: 5,
     timezone: 'Asia/Tokyo',
+    invoice_registration_number: 'T1234567890123',
+    cash_float_default: 30000,
     created_at: minutesAgo(now, 60 * 24 * 30),
     updated_at: minutesAgo(now, 60 * 24 * 30),
   };
@@ -107,7 +115,9 @@ export function createDemoState(): DemoState {
     name: string,
     description: string | null,
     price: number,
-    prepStation: PrepStation
+    prepStation: PrepStation,
+    // 酒類・非飲食料品は持ち帰りでも軽減税率の対象外
+    reducedEligible = true
   ): MenuItem {
     itemSeq += 1;
     const item: MenuItem = {
@@ -118,7 +128,7 @@ export function createDemoState(): DemoState {
       description,
       price,
       image_url: null,
-      tax_rate: null,
+      reduced_rate_eligible: reducedEligible,
       prep_station: prepStation,
       is_available: true,
       is_sold_out: false,
@@ -151,10 +161,10 @@ export function createDemoState(): DemoState {
   const edamame = addItem(ippin, '枝豆', null, 380, 'kitchen');
   addItem(ippin, '冷やしトマト', null, 420, 'kitchen');
 
-  const beer = addItem(drink, '生ビール', 'アサヒスーパードライ', 580, 'bar');
-  const highball = addItem(drink, 'ハイボール', '角ハイボール', 480, 'bar');
-  const lemonSour = addItem(drink, 'レモンサワー', '自家製レモンシロップ', 480, 'bar');
-  addItem(drink, '日本酒（冷）', '本日のおすすめ一合', 780, 'bar');
+  const beer = addItem(drink, '生ビール', 'アサヒスーパードライ', 580, 'bar', false);
+  const highball = addItem(drink, 'ハイボール', '角ハイボール', 480, 'bar', false);
+  const lemonSour = addItem(drink, 'レモンサワー', '自家製レモンシロップ', 480, 'bar', false);
+  addItem(drink, '日本酒（冷）', '本日のおすすめ一合', 780, 'bar', false);
   const oolong = addItem(drink, '烏龍茶', null, 350, 'bar');
   addItem(drink, 'コーラ', null, 350, 'bar');
 
@@ -197,8 +207,18 @@ export function createDemoState(): DemoState {
   const orders: Order[] = [];
   const orderItems: OrderItem[] = [];
   const payments: Payment[] = [];
+  const cashMovements: CashMovement[] = [];
+  const cashClosings: CashDrawerClosing[] = [];
 
   let orderSeq = 0;
+
+  const STANDARD_RATE = store.standard_tax_rate;
+  const REDUCED_RATE = store.reduced_tax_rate;
+
+  /** 提供形態と商品から適用税率を決める（SQL の place_order と同じ判定） */
+  function rateFor(item: MenuItem, serviceType: ServiceType): number {
+    return serviceType === 'takeout' && item.reduced_rate_eligible ? REDUCED_RATE : STANDARD_RATE;
+  }
 
   function addOrder(
     session: TableSession,
@@ -220,6 +240,7 @@ export function createDemoState(): DemoState {
       session_id: session.id,
       order_number: orderSeq,
       channel,
+      service_type: session.service_type,
       note: null,
       placed_at: placedAt,
     };
@@ -238,13 +259,14 @@ export function createDemoState(): DemoState {
         options_price: optionsPrice,
         options_snapshot: line.options ?? [],
         quantity: line.quantity,
-        tax_rate: 0.1,
+        tax_rate: rateFor(line.item, session.service_type),
         prep_station: line.item.prep_station,
         status: line.status,
         note: line.note ?? null,
         created_at: placedAt,
         updated_at: placedAt,
         line_total: (line.item.price + optionsPrice) * line.quantity,
+        payment_id: null,
       });
     });
 
@@ -255,7 +277,8 @@ export function createDemoState(): DemoState {
     tableIndex: number,
     guestCount: number,
     minutesBefore: number,
-    status: TableSession['status']
+    status: TableSession['status'],
+    serviceType: ServiceType = 'eat_in'
   ): TableSession {
     const session: TableSession = {
       id: `ses-${sessions.length + 1}`,
@@ -263,6 +286,7 @@ export function createDemoState(): DemoState {
       table_id: tables[tableIndex].id,
       guest_count: guestCount,
       status,
+      service_type: serviceType,
       opened_at: minutesAgo(now, minutesBefore),
       closed_at: null,
       note: null,
@@ -321,36 +345,64 @@ export function createDemoState(): DemoState {
     openedMinutesAgo: number,
     closedMinutesAgo: number,
     lines: { item: MenuItem; quantity: number }[],
-    method: Payment['method']
+    method: Payment['method'],
+    serviceType: ServiceType = 'eat_in'
   ) {
-    const session = addSession(tableIndex, guestCount, openedMinutesAgo, 'closed');
+    const session = addSession(tableIndex, guestCount, openedMinutesAgo, 'closed', serviceType);
     session.closed_at = minutesAgo(now, closedMinutesAgo);
 
-    addOrder(
+    const order = addOrder(
       session,
       'mobile',
       openedMinutesAgo - 3,
       lines.map((line) => ({ item: line.item, quantity: line.quantity, status: 'served' as const }))
     );
 
+    const paymentId = `pay-${payments.length + 1}`;
+
+    // 税率ごとに集計する（内税なので総額から逆算した内訳）
+    const byRate = new Map<number, number>();
+    for (const line of lines) {
+      const rate = rateFor(line.item, serviceType);
+      byRate.set(rate, (byRate.get(rate) ?? 0) + line.item.price * line.quantity);
+    }
+    const breakdown = [...byRate.entries()]
+      .sort((a, b) => b[0] - a[0])
+      .map(([rate, taxable]) => ({
+        rate,
+        taxable,
+        tax: Math.round((taxable * rate) / (1 + rate)),
+      }));
+
     const subtotal = lines.reduce((sum, line) => sum + line.item.price * line.quantity, 0);
+    const rounded = Math.ceil(subtotal / 1000) * 1000;
+
     payments.push({
-      id: `pay-${payments.length + 1}`,
+      id: paymentId,
       store_id: STORE_ID,
       session_id: session.id,
       method,
       subtotal,
       discount: 0,
       service_charge: 0,
-      // 内税なので総額から逆算した内訳
-      tax: Math.round((subtotal * 0.1) / 1.1),
+      tax: breakdown.reduce((sum, b) => sum + b.tax, 0),
       total: subtotal,
-      received: method === 'cash' ? Math.ceil(subtotal / 1000) * 1000 : subtotal,
-      change_due: method === 'cash' ? Math.ceil(subtotal / 1000) * 1000 - subtotal : 0,
+      received: method === 'cash' ? rounded : subtotal,
+      change_due: method === 'cash' ? rounded - subtotal : 0,
       status: 'paid',
       note: null,
       paid_at: minutesAgo(now, closedMinutesAgo),
+      tax_breakdown: breakdown,
+      split_count: 1,
+      split_index: 1,
+      voided_at: null,
+      void_reason: null,
     });
+
+    // 会計済みの明細は payment に紐付ける
+    for (const item of orderItems) {
+      if (item.order_id === order.id) item.payment_id = paymentId;
+    }
   }
 
   addClosedSession(4, 2, 180, 110, [
@@ -372,6 +424,39 @@ export function createDemoState(): DemoState {
     { item: negima, quantity: 3 },
   ], 'qr');
 
+  // 持ち帰りの会計。軽減税率 8% と標準税率 10% が混ざる例として入れておく
+  addClosedSession(2, 1, 95, 90, [
+    { item: momo, quantity: 4 },     // 飲食料品 → 持ち帰りなら 8%
+    { item: dashimaki, quantity: 1 },// 飲食料品 → 8%
+    { item: beer, quantity: 1 },     // 酒類 → 持ち帰りでも 10%
+  ], 'cash', 'takeout');
+
+  // -------------------------------------------------------------------------
+  // 現金の入出金（レジ締め画面で理論在高に反映される）
+  // -------------------------------------------------------------------------
+  const today = businessDay(now, store.business_day_cutoff_hour);
+
+  cashMovements.push(
+    {
+      id: 'cm-1',
+      store_id: STORE_ID,
+      business_day: today,
+      kind: 'deposit',
+      amount: 10000,
+      reason: '両替（千円札の補充）',
+      created_at: minutesAgo(now, 200),
+    },
+    {
+      id: 'cm-2',
+      store_id: STORE_ID,
+      business_day: today,
+      kind: 'withdrawal',
+      amount: 3500,
+      reason: '氷の買い出し',
+      created_at: minutesAgo(now, 140),
+    }
+  );
+
   return {
     store,
     tables,
@@ -384,5 +469,18 @@ export function createDemoState(): DemoState {
     orders,
     orderItems,
     payments,
+    cashMovements,
+    cashClosings,
   };
+}
+
+/** 営業日（Asia/Tokyo・区切り時刻あり）を YYYY-MM-DD で返す */
+function businessDay(base: number, cutoffHour: number): string {
+  const local = new Date(new Date(base).toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+  local.setHours(local.getHours() - cutoffHour);
+  return [
+    local.getFullYear(),
+    String(local.getMonth() + 1).padStart(2, '0'),
+    String(local.getDate()).padStart(2, '0'),
+  ].join('-');
 }

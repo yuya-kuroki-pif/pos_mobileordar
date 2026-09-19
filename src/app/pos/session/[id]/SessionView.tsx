@@ -5,14 +5,29 @@ import { useMemo, useState, useTransition } from 'react';
 
 import { OptionDialog } from '@/components/OptionDialog';
 import { Button } from '@/components/ui';
-import { placePosOrder, updateItemQuantity, updateItemStatus } from '@/lib/actions/order';
-import { ORDER_ITEM_STATUS_LABEL, formatTime, formatYen } from '@/lib/format';
+import {
+  mergeSessions,
+  moveSession,
+  placePosOrder,
+  updateItemQuantity,
+  updateItemStatus,
+  updateServiceType,
+} from '@/lib/actions/order';
+import {
+  ORDER_ITEM_STATUS_LABEL,
+  SERVICE_TYPE_LABEL,
+  formatTaxRate,
+  formatTime,
+  formatYen,
+} from '@/lib/format';
 import type {
   CategoryWithItems,
   MenuItemWithOptions,
   Order,
   OrderItem,
+  ServiceType,
   SessionTotal,
+  Store,
   TableSession,
 } from '@/lib/types';
 import { buildCartLine, lineTotal, useCart } from '@/lib/useCart';
@@ -26,6 +41,18 @@ interface LiveData {
   total: SessionTotal;
 }
 
+export interface TableOption {
+  id: string;
+  name: string;
+  area: string | null;
+}
+
+export interface SessionOption {
+  sessionId: string;
+  tableName: string;
+  total: number;
+}
+
 export function SessionView({
   sessionId,
   initialSession,
@@ -33,9 +60,9 @@ export function SessionView({
   orders,
   initialTotal,
   menu,
-  serviceChargeRate,
-  taxRate,
-  taxIncluded,
+  store,
+  emptyTables,
+  otherSessions,
   readOnly,
 }: {
   sessionId: string;
@@ -44,13 +71,15 @@ export function SessionView({
   orders: Order[];
   initialTotal: SessionTotal;
   menu: CategoryWithItems[];
-  serviceChargeRate: number;
-  taxRate: number;
-  taxIncluded: boolean;
+  store: Store;
+  emptyTables: TableOption[];
+  otherSessions: SessionOption[];
   readOnly: boolean;
 }) {
-  const [tab, setTab] = useState<'bill' | 'order'>(readOnly ? 'bill' : 'bill');
+  const [tab, setTab] = useState<'bill' | 'order'>('bill');
   const [checkingOut, setCheckingOut] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [merging, setMerging] = useState(false);
 
   const { data, refresh } = useLiveData<LiveData>(
     `/api/pos/session/${sessionId}`,
@@ -59,16 +88,38 @@ export function SessionView({
     6000
   );
 
+  const unpaidItems = useMemo(
+    () => data.items.filter((item) => item.payment_id === null && item.status !== 'cancelled'),
+    [data.items]
+  );
+
   return (
     <main className="mx-auto max-w-7xl px-4 py-5">
       {!readOnly && (
-        <div className="no-select mb-5 inline-flex rounded-xl bg-charcoal-100 p-1">
-          <TabButton active={tab === 'bill'} onClick={() => setTab('bill')}>
-            伝票
-          </TabButton>
-          <TabButton active={tab === 'order'} onClick={() => setTab('order')}>
-            注文入力
-          </TabButton>
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <div className="no-select inline-flex rounded-xl bg-charcoal-100 p-1">
+            <TabButton active={tab === 'bill'} onClick={() => setTab('bill')}>
+              伝票
+            </TabButton>
+            <TabButton active={tab === 'order'} onClick={() => setTab('order')}>
+              注文入力
+            </TabButton>
+          </div>
+
+          <ServiceTypeToggle
+            sessionId={sessionId}
+            current={data.session.service_type}
+            onChanged={refresh}
+          />
+
+          <div className="ml-auto flex gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setMoving(true)}>
+              卓移動
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setMerging(true)}>
+              伝票結合
+            </Button>
+          </div>
         </div>
       )}
 
@@ -77,23 +128,46 @@ export function SessionView({
           items={data.items}
           orders={orders}
           total={data.total}
-          serviceChargeRate={serviceChargeRate}
-          taxIncluded={taxIncluded}
+          store={store}
           readOnly={readOnly}
           onChanged={refresh}
           onCheckout={() => setCheckingOut(true)}
         />
       ) : (
-        <OrderEntry sessionId={sessionId} menu={menu} onPlaced={() => { refresh(); setTab('bill'); }} />
+        <OrderEntry
+          sessionId={sessionId}
+          menu={menu}
+          serviceType={data.session.service_type}
+          onPlaced={() => {
+            refresh();
+            setTab('bill');
+          }}
+        />
       )}
 
       {checkingOut && (
         <CheckoutDialog
           sessionId={sessionId}
-          baseTotal={data.total}
-          taxRate={taxRate}
-          taxIncluded={taxIncluded}
+          store={store}
+          unpaidItems={unpaidItems}
           onClose={() => setCheckingOut(false)}
+          onPartialPaid={refresh}
+        />
+      )}
+
+      {moving && (
+        <MoveDialog
+          sessionId={sessionId}
+          tables={emptyTables}
+          onClose={() => setMoving(false)}
+        />
+      )}
+
+      {merging && (
+        <MergeDialog
+          sessionId={sessionId}
+          sessions={otherSessions}
+          onClose={() => setMerging(false)}
         />
       )}
     </main>
@@ -122,6 +196,52 @@ function TabButton({
   );
 }
 
+/**
+ * 店内 / 持ち帰りの切り替え。
+ * これ以降の注文に適用される（すでに通した注文の税率は変えない）。
+ */
+function ServiceTypeToggle({
+  sessionId,
+  current,
+  onChanged,
+}: {
+  sessionId: string;
+  current: ServiceType;
+  onChanged: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+
+  function change(next: ServiceType) {
+    if (next === current) return;
+    startTransition(async () => {
+      const result = await updateServiceType(sessionId, next);
+      if (!result.ok) alert(result.error ?? '変更できませんでした');
+      onChanged();
+    });
+  }
+
+  return (
+    <div className="no-select inline-flex items-center gap-2">
+      <span className="text-xs font-semibold text-charcoal-400">提供形態</span>
+      <div className="inline-flex rounded-xl bg-charcoal-100 p-1">
+        {(['eat_in', 'takeout'] as const).map((type) => (
+          <button
+            key={type}
+            type="button"
+            disabled={pending}
+            onClick={() => change(type)}
+            className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-colors ${
+              current === type ? 'bg-white text-charcoal-900 shadow-sm' : 'text-charcoal-500'
+            }`}
+          >
+            {SERVICE_TYPE_LABEL[type]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // 伝票
 // ---------------------------------------------------------------------------
@@ -130,8 +250,7 @@ function BillView({
   items,
   orders,
   total,
-  serviceChargeRate,
-  taxIncluded,
+  store,
   readOnly,
   onChanged,
   onCheckout,
@@ -139,8 +258,7 @@ function BillView({
   items: OrderItem[];
   orders: Order[];
   total: SessionTotal;
-  serviceChargeRate: number;
-  taxIncluded: boolean;
+  store: Store;
   readOnly: boolean;
   onChanged: () => void;
   onCheckout: () => void;
@@ -157,6 +275,8 @@ function BillView({
       .map((order) => ({ order, items: byOrder.get(order.id) ?? [] }))
       .filter((group) => group.items.length > 0);
   }, [items, orders]);
+
+  const paidCount = items.filter((i) => i.payment_id !== null).length;
 
   function act(fn: () => Promise<unknown>) {
     startTransition(async () => {
@@ -176,7 +296,7 @@ function BillView({
 
         {grouped.map(({ order, items: orderItems }) => (
           <div key={order.id} className="rounded-2xl border border-charcoal-100 bg-white">
-            <div className="flex items-center gap-2 border-b border-charcoal-100 px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-2 border-b border-charcoal-100 px-4 py-2.5">
               <span className="tabular text-sm font-bold text-charcoal-700">
                 伝票 #{order.order_number}
               </span>
@@ -190,6 +310,11 @@ function BillView({
               >
                 {order.channel === 'mobile' ? 'モバイル' : 'レジ入力'}
               </span>
+              {order.service_type === 'takeout' && (
+                <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-bold text-sky-800">
+                  持ち帰り
+                </span>
+              )}
             </div>
 
             <ul className="divide-y divide-charcoal-50">
@@ -203,6 +328,9 @@ function BillView({
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold">
                       {item.name_snapshot}
+                      {item.tax_rate < store.standard_tax_rate && (
+                        <span className="ml-1 text-xs font-normal text-sky-700">※</span>
+                      )}
                       {item.status === 'cancelled' && (
                         <span className="ml-2 text-xs font-normal">（取消）</span>
                       )}
@@ -215,7 +343,14 @@ function BillView({
                     {item.note && (
                       <p className="mt-0.5 text-xs text-ember-600">備考: {item.note}</p>
                     )}
-                    <StatusChip status={item.status} />
+                    <div className="mt-1 flex items-center gap-2">
+                      <StatusChip status={item.status} />
+                      {item.payment_id !== null && (
+                        <span className="rounded bg-charcoal-100 px-1.5 py-0.5 text-[11px] font-bold text-charcoal-500">
+                          会計済
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <span className="tabular w-10 shrink-0 text-right text-sm text-charcoal-500">
@@ -225,7 +360,7 @@ function BillView({
                     {formatYen(item.line_total)}
                   </span>
 
-                  {!readOnly && item.status !== 'cancelled' && (
+                  {!readOnly && item.status !== 'cancelled' && item.payment_id === null && (
                     <div className="no-select flex shrink-0 gap-1">
                       {item.status !== 'served' && (
                         <button
@@ -261,23 +396,42 @@ function BillView({
       {/* 合計パネル */}
       <div className="lg:sticky lg:top-20 lg:self-start">
         <div className="rounded-2xl border border-charcoal-100 bg-white p-5">
+          {paidCount > 0 && (
+            <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
+              一部が会計済みです。下の金額は未会計ぶんのみを表しています。
+            </p>
+          )}
+
           <Row label="小計" value={formatYen(total.subtotal)} />
-          {serviceChargeRate > 0 && (
+          {store.service_charge_rate > 0 && (
             <Row
-              label={`サービス料 ${(serviceChargeRate * 100).toFixed(0)}%`}
+              label={`サービス料 ${(store.service_charge_rate * 100).toFixed(0)}%`}
               value={formatYen(total.service_charge)}
             />
           )}
-          <Row
-            label={taxIncluded ? '（内 消費税）' : '消費税'}
-            value={formatYen(total.tax)}
-            muted
-          />
+
+          {/* 税率別の内訳 */}
+          {total.tax_breakdown.map((row) => (
+            <div key={row.rate} className="flex justify-between py-0.5 text-xs text-charcoal-400">
+              <span>
+                {formatTaxRate(row.rate)}対象 {formatYen(row.taxable)}
+                {row.rate < store.standard_tax_rate && ' ※'}
+              </span>
+              <span className="tabular">
+                {store.tax_included ? '内税 ' : '税 '}
+                {formatYen(row.tax)}
+              </span>
+            </div>
+          ))}
 
           <div className="mt-3 flex items-baseline justify-between border-t border-charcoal-100 pt-3">
             <span className="font-bold">合計</span>
             <span className="tabular text-3xl font-bold">{formatYen(total.total)}</span>
           </div>
+
+          {total.tax_breakdown.some((r) => r.rate < store.standard_tax_rate) && (
+            <p className="mt-2 text-[11px] text-charcoal-400">※ は軽減税率対象</p>
+          )}
 
           {!readOnly && (
             <Button size="lg" className="mt-5 w-full" onClick={onCheckout}>
@@ -290,9 +444,9 @@ function BillView({
   );
 }
 
-function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className={`flex justify-between py-1 text-sm ${muted ? 'text-charcoal-400' : ''}`}>
+    <div className="flex justify-between py-1 text-sm">
       <span>{label}</span>
       <span className="tabular font-semibold">{value}</span>
     </div>
@@ -311,9 +465,182 @@ function StatusChip({ status }: { status: OrderItem['status'] }) {
   }[status];
 
   return (
-    <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-bold ${tone}`}>
+    <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-bold ${tone}`}>
       {ORDER_ITEM_STATUS_LABEL[status]}
     </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 卓移動 / 伝票結合
+// ---------------------------------------------------------------------------
+
+function Sheet({
+  title,
+  description,
+  children,
+  onClose,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-end justify-center bg-charcoal-900/60 p-4 sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-lg font-bold">{title}</h2>
+        {description && <p className="mt-1 text-sm text-charcoal-500">{description}</p>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MoveDialog({
+  sessionId,
+  tables,
+  onClose,
+}: {
+  sessionId: string;
+  tables: TableOption[];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function move(tableId: string) {
+    setError(null);
+    startTransition(async () => {
+      const result = await moveSession(sessionId, tableId);
+      if (!result.ok) {
+        setError(result.error ?? '移動できませんでした');
+        return;
+      }
+      onClose();
+      router.refresh();
+    });
+  }
+
+  return (
+    <Sheet title="卓を移動する" description="移動先の卓を選んでください" onClose={onClose}>
+      {tables.length === 0 ? (
+        <p className="mt-5 rounded-xl bg-charcoal-50 px-4 py-6 text-center text-sm text-charcoal-400">
+          空いている卓がありません
+        </p>
+      ) : (
+        <div className="no-select mt-5 grid max-h-72 grid-cols-3 gap-2 overflow-y-auto">
+          {tables.map((table) => (
+            <button
+              key={table.id}
+              type="button"
+              disabled={pending}
+              onClick={() => move(table.id)}
+              className="rounded-xl bg-charcoal-100 px-3 py-4 text-sm font-bold text-charcoal-800
+                transition-colors active:bg-charcoal-200 disabled:opacity-50"
+            >
+              {table.name}
+              {table.area && (
+                <span className="mt-0.5 block text-[11px] font-normal text-charcoal-400">
+                  {table.area}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+
+      <Button variant="secondary" className="mt-5 w-full" onClick={onClose}>
+        閉じる
+      </Button>
+    </Sheet>
+  );
+}
+
+function MergeDialog({
+  sessionId,
+  sessions,
+  onClose,
+}: {
+  sessionId: string;
+  sessions: SessionOption[];
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function merge(targetId: string, tableName: string) {
+    if (!confirm(`この伝票を ${tableName} に結合しますか？\nこの卓は結合済みとして閉じられます。`)) {
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await mergeSessions(sessionId, targetId);
+      if (!result.ok) {
+        setError(result.error ?? '結合できませんでした');
+        return;
+      }
+      onClose();
+      router.push(`/pos/session/${targetId}`);
+    });
+  }
+
+  return (
+    <Sheet
+      title="伝票を結合する"
+      description="この伝票の注文を、選んだ卓の伝票にまとめます"
+      onClose={onClose}
+    >
+      {sessions.length === 0 ? (
+        <p className="mt-5 rounded-xl bg-charcoal-50 px-4 py-6 text-center text-sm text-charcoal-400">
+          結合できる伝票がありません
+        </p>
+      ) : (
+        <ul className="no-select mt-5 max-h-72 space-y-2 overflow-y-auto">
+          {sessions.map((session) => (
+            <li key={session.sessionId}>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => merge(session.sessionId, session.tableName)}
+                className="flex w-full items-center justify-between rounded-xl bg-charcoal-100 px-4 py-3
+                  text-left font-bold text-charcoal-800 transition-colors active:bg-charcoal-200
+                  disabled:opacity-50"
+              >
+                <span>{session.tableName}</span>
+                <span className="tabular text-sm font-semibold text-charcoal-500">
+                  {formatYen(session.total)}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {error && (
+        <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+
+      <Button variant="secondary" className="mt-5 w-full" onClick={onClose}>
+        閉じる
+      </Button>
+    </Sheet>
   );
 }
 
@@ -324,10 +651,12 @@ function StatusChip({ status }: { status: OrderItem['status'] }) {
 function OrderEntry({
   sessionId,
   menu,
+  serviceType,
   onPlaced,
 }: {
   sessionId: string;
   menu: CategoryWithItems[];
+  serviceType: ServiceType;
   onPlaced: () => void;
 }) {
   const router = useRouter();
@@ -400,7 +729,12 @@ function OrderEntry({
                 bg-white p-3 text-left transition-colors hover:border-ember-300
                 disabled:bg-charcoal-100 disabled:opacity-60"
             >
-              <span className="line-clamp-2 text-sm font-bold leading-snug">{item.name}</span>
+              <span className="line-clamp-2 text-sm font-bold leading-snug">
+                {item.name}
+                {serviceType === 'takeout' && item.reduced_rate_eligible && (
+                  <span className="ml-1 text-[11px] font-normal text-sky-700">8%</span>
+                )}
+              </span>
               <span className="tabular text-sm font-semibold text-charcoal-500">
                 {item.is_sold_out ? '売切' : formatYen(item.price)}
               </span>
@@ -417,9 +751,18 @@ function OrderEntry({
       {/* カート */}
       <div className="lg:sticky lg:top-20 lg:self-start">
         <div className="rounded-2xl border border-charcoal-100 bg-white">
-          <p className="border-b border-charcoal-100 px-4 py-3 font-bold">
-            追加する注文 {cart.count > 0 && `(${cart.count})`}
-          </p>
+          <div className="flex items-center gap-2 border-b border-charcoal-100 px-4 py-3">
+            <p className="font-bold">追加する注文 {cart.count > 0 && `(${cart.count})`}</p>
+            <span
+              className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                serviceType === 'takeout'
+                  ? 'bg-sky-100 text-sky-800'
+                  : 'bg-charcoal-100 text-charcoal-500'
+              }`}
+            >
+              {SERVICE_TYPE_LABEL[serviceType]}
+            </span>
+          </div>
 
           <ul className="max-h-[50vh] divide-y divide-charcoal-50 overflow-y-auto">
             {cart.lines.map((line) => (
@@ -497,11 +840,7 @@ function OrderEntry({
       </div>
 
       {dialogItem && (
-        <OptionDialog
-          item={dialogItem}
-          onAdd={cart.add}
-          onClose={() => setDialogItem(null)}
-        />
+        <OptionDialog item={dialogItem} onAdd={cart.add} onClose={() => setDialogItem(null)} />
       )}
     </div>
   );

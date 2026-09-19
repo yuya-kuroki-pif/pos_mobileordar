@@ -6,7 +6,13 @@ import { getStaffSession } from '../auth';
 import * as demo from '../demo/repo';
 import { getOpenSessionForTable, getStoreById, getTableByToken } from '../queries';
 import { isDemoMode, supabaseAdmin } from '../supabase';
-import type { OrderChannel, OrderItemStatus, PaymentMethod } from '../types';
+import type {
+  CashMovementKind,
+  OrderChannel,
+  OrderItemStatus,
+  PaymentMethod,
+  ServiceType,
+} from '../types';
 
 /** 注文 1 行ぶんの入力。価格はサーバー側で引き直すため送らせない */
 export interface OrderLineInput {
@@ -43,7 +49,8 @@ export async function startSession(token: string, guestCount: number): Promise<A
     const table = await getTableByToken(token);
     if (!table) return { ok: false, error: 'この QR コードは無効です。店員にお声がけください。' };
 
-    const sessionId = await openSession(table.id, guestCount);
+    // 客の QR からの入店は常に店内飲食。持ち帰りはレジで扱う
+    const sessionId = await openSession(table.id, guestCount, 'eat_in');
 
     revalidatePath(`/order/${token}`);
     return { ok: true, id: sessionId };
@@ -123,7 +130,11 @@ async function requireStoreId(): Promise<string> {
 }
 
 /** POS から卓を開ける */
-export async function openTable(tableId: string, guestCount: number): Promise<ActionResult> {
+export async function openTable(
+  tableId: string,
+  guestCount: number,
+  serviceType: ServiceType = 'eat_in'
+): Promise<ActionResult> {
   try {
     const storeId = await requireStoreId();
 
@@ -138,7 +149,7 @@ export async function openTable(tableId: string, guestCount: number): Promise<Ac
       if (!table) return { ok: false, error: '卓が見つかりません。' };
     }
 
-    const sessionId = await openSession(tableId, guestCount);
+    const sessionId = await openSession(tableId, guestCount, serviceType);
 
     revalidatePath('/pos');
     return { ok: true, id: sessionId };
@@ -151,13 +162,15 @@ export async function openTable(tableId: string, guestCount: number): Promise<Ac
 export async function placePosOrder(
   sessionId: string,
   lines: OrderLineInput[],
-  note?: string
+  note?: string,
+  /** null ならセッションの提供形態を引き継ぐ */
+  serviceType: ServiceType | null = null
 ): Promise<ActionResult> {
   try {
     const storeId = await requireStoreId();
     await assertSessionInStore(sessionId, storeId);
 
-    const result = await insertOrder(sessionId, 'pos', lines, note);
+    const result = await insertOrder(sessionId, 'pos', lines, note, serviceType);
     if (!result.ok) return result;
 
     revalidatePath('/pos');
@@ -227,13 +240,20 @@ export async function updateItemQuantity(
   }
 }
 
-/** 会計する。mock 決済（実際の決済連携は行わず、記録のみ） */
+/**
+ * 会計する。mock 決済（実際の決済連携は行わず、記録のみ）。
+ *
+ *   itemIds 指定   → その明細だけを会計する（明細指定の分割）
+ *   splitCount > 1 → 未会計分を等分する（人数割り）
+ *   どちらもなし   → 未会計分をすべて会計する
+ */
 export async function checkout(
   sessionId: string,
   method: PaymentMethod,
   discount: number,
   received: number,
-  note?: string
+  note?: string,
+  options: { itemIds?: string[] | null; splitCount?: number; splitIndex?: number } = {}
 ): Promise<ActionResult> {
   try {
     const storeId = await requireStoreId();
@@ -241,17 +261,27 @@ export async function checkout(
 
     const safeDiscount = Math.max(0, Math.floor(discount));
     const safeReceived = Math.max(0, Math.floor(received));
+    const itemIds = options.itemIds ?? null;
+    const splitCount = Math.max(1, options.splitCount ?? 1);
+    const splitIndex = Math.max(1, options.splitIndex ?? 1);
 
     let paymentId: string;
     if (isDemoMode()) {
-      paymentId = demo.checkoutSession(sessionId, method, safeDiscount, safeReceived);
+      paymentId = demo.checkoutPayment(sessionId, method, safeDiscount, safeReceived, {
+        itemIds,
+        splitCount,
+        splitIndex,
+      });
     } else {
-      const { data, error } = await supabaseAdmin().rpc('checkout_session', {
+      const { data, error } = await supabaseAdmin().rpc('checkout_payment', {
         p_session_id: sessionId,
         p_method: method,
         p_discount: safeDiscount,
         p_received: safeReceived,
         p_note: note ?? null,
+        p_item_ids: itemIds,
+        p_split_count: splitCount,
+        p_split_index: splitIndex,
       });
       if (error) throw error;
       paymentId = data as string;
@@ -260,6 +290,118 @@ export async function checkout(
     revalidatePath('/pos');
     revalidatePath('/admin');
     return { ok: true, id: paymentId };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/** 会計を取り消す。誤会計のリカバリ */
+export async function voidPayment(paymentId: string, reason: string): Promise<ActionResult> {
+  try {
+    const storeId = await requireStoreId();
+
+    if (isDemoMode()) {
+      demo.voidPayment(paymentId, reason);
+    } else {
+      // 他店舗の会計を取り消せないよう確認する
+      const { data } = await supabaseAdmin()
+        .from('payments')
+        .select('id')
+        .eq('id', paymentId)
+        .eq('store_id', storeId)
+        .maybeSingle();
+      if (!data) return { ok: false, error: '会計が見つかりません。' };
+
+      const { error } = await supabaseAdmin().rpc('void_payment', {
+        p_payment_id: paymentId,
+        p_reason: reason,
+      });
+      if (error) throw error;
+    }
+
+    revalidatePath('/pos');
+    revalidatePath('/admin');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/** 卓移動 */
+export async function moveSession(
+  sessionId: string,
+  toTableId: string
+): Promise<ActionResult> {
+  try {
+    const storeId = await requireStoreId();
+    await assertSessionInStore(sessionId, storeId);
+
+    if (isDemoMode()) {
+      demo.moveSession(sessionId, toTableId);
+    } else {
+      const { error } = await supabaseAdmin().rpc('move_session', {
+        p_session_id: sessionId,
+        p_to_table_id: toTableId,
+      });
+      if (error) throw error;
+    }
+
+    revalidatePath('/pos');
+    revalidatePath(`/pos/session/${sessionId}`);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/** 伝票結合。source を target に吸収する */
+export async function mergeSessions(
+  sourceSessionId: string,
+  targetSessionId: string
+): Promise<ActionResult> {
+  try {
+    const storeId = await requireStoreId();
+    await assertSessionInStore(sourceSessionId, storeId);
+    await assertSessionInStore(targetSessionId, storeId);
+
+    if (isDemoMode()) {
+      demo.mergeSessions(sourceSessionId, targetSessionId);
+    } else {
+      const { error } = await supabaseAdmin().rpc('merge_sessions', {
+        p_source_session_id: sourceSessionId,
+        p_target_session_id: targetSessionId,
+      });
+      if (error) throw error;
+    }
+
+    revalidatePath('/pos');
+    return { ok: true, id: targetSessionId };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/** 卓の提供形態を切り替える（店内 ⇔ 持ち帰り） */
+export async function updateServiceType(
+  sessionId: string,
+  serviceType: ServiceType
+): Promise<ActionResult> {
+  try {
+    const storeId = await requireStoreId();
+    await assertSessionInStore(sessionId, storeId);
+
+    if (isDemoMode()) {
+      demo.updateServiceType(sessionId, serviceType);
+    } else {
+      const { error } = await supabaseAdmin()
+        .from('table_sessions')
+        .update({ service_type: serviceType })
+        .eq('id', sessionId);
+      if (error) throw error;
+    }
+
+    revalidatePath(`/pos/session/${sessionId}`);
+    return { ok: true };
   } catch (error) {
     return { ok: false, error: toMessage(error) };
   }
@@ -328,25 +470,112 @@ export async function cancelSession(sessionId: string): Promise<ActionResult> {
 }
 
 // ===========================================================================
+// 現金在高・レジ締め
+// ===========================================================================
+
+/** 現金の入出金を記録する（両替・買い出しなど） */
+export async function addCashMovement(
+  businessDay: string,
+  kind: CashMovementKind,
+  amount: number,
+  reason: string
+): Promise<ActionResult> {
+  try {
+    const storeId = await requireStoreId();
+    const safeAmount = Math.floor(amount);
+    if (safeAmount <= 0) return { ok: false, error: '金額を入力してください。' };
+
+    if (isDemoMode()) {
+      demo.addCashMovement(businessDay, kind, safeAmount, reason || null);
+    } else {
+      const { error } = await supabaseAdmin().from('cash_movements').insert({
+        store_id: storeId,
+        business_day: businessDay,
+        kind,
+        amount: safeAmount,
+        reason: reason || null,
+      });
+      if (error) throw error;
+    }
+
+    revalidatePath('/pos/close');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+/** レジ締め。理論在高と実査額の差異を記録する */
+export async function closeCashDrawer(
+  businessDay: string,
+  openingFloat: number,
+  countedCash: number,
+  note: string
+): Promise<ActionResult> {
+  try {
+    const storeId = await requireStoreId();
+    const safeFloat = Math.max(0, Math.floor(openingFloat));
+    const safeCounted = Math.max(0, Math.floor(countedCash));
+
+    let id: string;
+    if (isDemoMode()) {
+      id = demo.closeCashDrawer(businessDay, safeFloat, safeCounted, note || null);
+    } else {
+      const { data, error } = await supabaseAdmin().rpc('close_cash_drawer', {
+        p_store_id: storeId,
+        p_business_day: businessDay,
+        p_opening_float: safeFloat,
+        p_counted_cash: safeCounted,
+        p_note: note || null,
+      });
+      if (error) throw error;
+      id = data as string;
+    }
+
+    revalidatePath('/pos/close');
+    return { ok: true, id };
+  } catch (error) {
+    return { ok: false, error: toMessage(error) };
+  }
+}
+
+// ===========================================================================
 // 内部ヘルパー
 // ===========================================================================
 
-async function openSession(tableId: string, guestCount: number): Promise<string> {
-  if (isDemoMode()) return demo.openTableSession(tableId, guestCount);
+async function openSession(
+  tableId: string,
+  guestCount: number,
+  serviceType: ServiceType
+): Promise<string> {
+  if (isDemoMode()) return demo.openTableSession(tableId, guestCount, serviceType);
 
   const { data, error } = await supabaseAdmin().rpc('open_table_session', {
     p_table_id: tableId,
     p_guest_count: guestCount,
   });
   if (error) throw error;
-  return data as string;
+
+  const sessionId = data as string;
+
+  // open_table_session は既存セッションがあればそれを返すので、
+  // 提供形態の指定は新規に開けたときだけ反映されればよい
+  if (serviceType !== 'eat_in') {
+    await supabaseAdmin()
+      .from('table_sessions')
+      .update({ service_type: serviceType })
+      .eq('id', sessionId);
+  }
+
+  return sessionId;
 }
 
 async function insertOrder(
   sessionId: string,
   channel: OrderChannel,
   lines: OrderLineInput[],
-  note?: string
+  note?: string,
+  serviceType: ServiceType | null = null
 ): Promise<ActionResult> {
   const items = lines
     .filter((line) => line.menu_item_id && line.quantity > 0)
@@ -361,13 +590,14 @@ async function insertOrder(
 
   let orderId: string;
   if (isDemoMode()) {
-    orderId = demo.placeOrder(sessionId, channel, items);
+    orderId = demo.placeOrder(sessionId, channel, items, serviceType);
   } else {
     const { data, error } = await supabaseAdmin().rpc('place_order', {
       p_session_id: sessionId,
       p_channel: channel,
       p_items: items,
       p_note: note ?? null,
+      p_service_type: serviceType,
     });
     if (error) throw error;
     orderId = data as string;

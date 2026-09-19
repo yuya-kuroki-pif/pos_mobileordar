@@ -1,8 +1,11 @@
 import 'server-only';
 
 import * as demo from './demo/repo';
+import { businessDate } from './format';
 import { isDemoMode, supabaseAdmin } from './supabase';
 import type {
+  CashDrawerClosing,
+  CashMovement,
   Category,
   CategoryWithItems,
   ItemRankingRow,
@@ -276,22 +279,40 @@ export async function getSessionOrders(sessionId: string): Promise<Order[]> {
   return (data ?? []) as Order[];
 }
 
-/** 会計金額。DB 側の calc_session_total() をそのまま使う */
+/**
+ * 会計金額。DB 側の calc_session_total() をそのまま使う。
+ *
+ * @param onlyUnpaid 分割会計では未会計の明細だけを対象にする
+ * @param itemIds    明細を指定した分割会計。null なら絞らない
+ */
 export async function getSessionTotal(
   sessionId: string,
-  discount = 0
+  discount = 0,
+  onlyUnpaid = true,
+  itemIds: string[] | null = null
 ): Promise<SessionTotal> {
-  if (isDemoMode()) return demo.getSessionTotal(sessionId, discount);
+  if (isDemoMode()) return demo.getSessionTotal(sessionId, discount, onlyUnpaid, itemIds);
 
   const { data, error } = await supabaseAdmin().rpc('calc_session_total', {
     p_session_id: sessionId,
     p_discount: discount,
+    p_only_unpaid: onlyUnpaid,
+    p_item_ids: itemIds,
   });
 
   if (error) throw new Error(error.message);
   // set-returning function なので配列で返ってくる
   const row = Array.isArray(data) ? data[0] : data;
-  return (row as SessionTotal) ?? { subtotal: 0, service_charge: 0, discount: 0, tax: 0, total: 0 };
+  return (
+    (row as SessionTotal) ?? {
+      subtotal: 0,
+      service_charge: 0,
+      discount: 0,
+      tax: 0,
+      total: 0,
+      tax_breakdown: [],
+    }
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -434,4 +455,78 @@ export async function getPaymentById(
     .eq('store_id', storeId)
     .maybeSingle();
   return (data as Payment) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// 現金在高・レジ締め
+// ---------------------------------------------------------------------------
+
+export async function getCashMovements(
+  storeId: string,
+  businessDay: string
+): Promise<CashMovement[]> {
+  if (isDemoMode()) return demo.getCashMovements(businessDay);
+
+  const { data, error } = await supabaseAdmin()
+    .from('cash_movements')
+    .select('*')
+    .eq('store_id', storeId)
+    .eq('business_day', businessDay)
+    .order('created_at');
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CashMovement[];
+}
+
+export async function getCashClosing(
+  storeId: string,
+  businessDay: string
+): Promise<CashDrawerClosing | null> {
+  if (isDemoMode()) return demo.getCashClosing(businessDay);
+
+  const { data } = await supabaseAdmin()
+    .from('cash_drawer_closings')
+    .select('*')
+    .eq('store_id', storeId)
+    .eq('business_day', businessDay)
+    .maybeSingle();
+  return (data as CashDrawerClosing) ?? null;
+}
+
+/**
+ * その営業日の現金売上。締め画面で理論在高を出すために使う。
+ * 取り消された会計（status = 'refunded'）は含めない。
+ */
+export async function getCashSales(storeId: string, businessDay: string): Promise<number> {
+  if (isDemoMode()) return demo.getCashSales(businessDay);
+
+  const store = await getStoreById(storeId);
+  if (!store) return 0;
+
+  // 営業日の判定は DB 関数と揃えたいので、前後 1 日を広めに取ってから絞り込む。
+  // （タイムゾーンと区切り時刻のぶん、暦日とはずれるため）
+  const { data, error } = await supabaseAdmin()
+    .from('payments')
+    .select('total, paid_at')
+    .eq('store_id', storeId)
+    .eq('status', 'paid')
+    .eq('method', 'cash')
+    .gte('paid_at', shiftDay(businessDay, -1))
+    .lt('paid_at', shiftDay(businessDay, 2));
+
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as { total: number; paid_at: string }[])
+    .filter(
+      (row) =>
+        businessDate(new Date(row.paid_at), store.timezone, store.business_day_cutoff_hour) ===
+        businessDay
+    )
+    .reduce((sum, row) => sum + row.total, 0);
+}
+
+function shiftDay(ymd: string, days: number): string {
+  const date = new Date(`${ymd}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString();
 }

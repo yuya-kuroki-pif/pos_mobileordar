@@ -59,18 +59,32 @@ export function SettingsForm({ store }: { store: Store }) {
             </Field>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field label="消費税率（%）">
+              <Field label="標準税率（%）" hint="店内飲食に適用">
                 <Input
-                  name="tax_rate"
+                  name="standard_tax_rate"
                   type="number"
                   step="0.1"
                   min={0}
                   max={100}
-                  defaultValue={(store.tax_rate * 100).toFixed(1)}
+                  defaultValue={(store.standard_tax_rate * 100).toFixed(1)}
                   className="tabular text-right"
                 />
               </Field>
 
+              <Field label="軽減税率（%）" hint="持ち帰りの飲食料品に適用">
+                <Input
+                  name="reduced_tax_rate"
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  max={100}
+                  defaultValue={(store.reduced_tax_rate * 100).toFixed(1)}
+                  className="tabular text-right"
+                />
+              </Field>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <Field label="サービス料（%）" hint="不要なら 0">
                 <Input
                   name="service_charge_rate"
@@ -82,7 +96,30 @@ export function SettingsForm({ store }: { store: Store }) {
                   className="tabular text-right"
                 />
               </Field>
+
+              <Field label="釣銭準備金の既定値（円）" hint="レジ締め画面の初期値">
+                <Input
+                  name="cash_float_default"
+                  type="number"
+                  min={0}
+                  step={1000}
+                  defaultValue={store.cash_float_default}
+                  className="tabular text-right"
+                />
+              </Field>
             </div>
+
+            <Field
+              label="適格請求書発行事業者の登録番号"
+              hint="レシートに印字されます。例: T1234567890123"
+            >
+              <Input
+                name="invoice_registration_number"
+                defaultValue={store.invoice_registration_number ?? ''}
+                placeholder="T1234567890123"
+                className="tabular"
+              />
+            </Field>
 
             <Field label="価格表示" hint="日本の飲食店は総額表示（内税）が一般的です">
               <select

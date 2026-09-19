@@ -9,7 +9,8 @@
 | 画面 | URL | 使う人 | できること |
 | --- | --- | --- | --- |
 | モバイルオーダー | `/order/{qr_token}` | 客（スマホ） | 人数入力 → メニュー閲覧 → オプション選択 → 注文 → 注文状況の確認 → お会計依頼 |
-| POS レジ | `/pos` | ホールスタッフ（タブレット） | フロアマップ、卓を開ける、注文入力、伝票確認、会計、レシート印刷 |
+| POS レジ | `/pos` | ホールスタッフ（タブレット） | フロアマップ、卓を開ける（店内/持ち帰り）、注文入力、伝票確認、分割会計、卓移動・伝票結合、レシート印刷、会計取消 |
+| レジ締め | `/pos/close` | 店長・締め担当 | 現金の入出金記録、金種を数えて理論在高との過不足を確認 |
 | キッチンディスプレイ | `/kds` | 厨房 | 伝票単位のカード表示、調理開始 / でき上がり / 提供済みの操作、遅延の色分け |
 | 管理ダッシュボード | `/admin` | 店長・本部 | 売上サマリ、メニュー管理、卓・QR 管理、売上分析、店舗設定 |
 
@@ -32,7 +33,13 @@
 
 **金額と伝票番号は DB 側で確定する。**
 価格はクライアントから送らせず、注文時に `menu_items` から引き直します
-（`place_order()` / `checkout_session()`）。伝票番号の採番は advisory lock で直列化しています。
+（`place_order()` / `checkout_payment()`）。伝票番号の採番は advisory lock で直列化しています。
+
+**消費税は税率ごとに分けて計算する。**
+店内飲食は標準税率、持ち帰りの飲食料品は軽減税率 8%（酒類は持ち帰りでも 10%）。
+サービス料は標準税率のグループに加え、割引は各税率グループへ金額按分します
+（端数は最後のグループが負担）。合計から一括で逆算するとインボイスの
+記載要件（税率ごとの合計額と消費税額）を満たせないためです。
 
 **注文時点の商品名・価格をスナップショットする。**
 `order_items` は `name_snapshot` / `unit_price` / `options_snapshot` を持つため、
@@ -85,7 +92,9 @@ CLI を使わない場合は、ダッシュボードの **SQL Editor** に以下
 1. `supabase/migrations/20260919000100_init_schema.sql`
 2. `supabase/migrations/20260919000200_functions.sql`
 3. `supabase/migrations/20260919000300_rls.sql`
-4. `supabase/seed.sql`（デモ店舗・メニュー・卓のサンプル）
+4. `supabase/migrations/20260919000400_phase_a_schema.sql`
+5. `supabase/migrations/20260919000500_phase_a_functions.sql`
+6. `supabase/seed.sql`（デモ店舗・メニュー・卓のサンプル）
 
 ### 3. 環境変数を設定する
 
@@ -133,15 +142,19 @@ npm run dev
 
 ```
 stores ──┬─ restaurant_tables ── table_sessions ──┬─ orders ── order_items
-         │                                        └─ payments
+         │                                        └─ payments ←┘（会計済みの明細）
          ├─ categories ── menu_items ──┐
-         └─ option_groups ── options ──┴─ menu_item_option_groups
+         ├─ option_groups ── options ──┴─ menu_item_option_groups
+         └─ cash_movements / cash_drawer_closings
 ```
 
 - **`table_sessions`** が会計の単位です。「卓を開ける」から「会計する」までが 1 レコードで、
   同じ卓に同時に開けるセッションは 1 つだけになるよう部分ユニークインデックスで保証しています。
 - **`orders`** は「注文するを 1 回押した」単位（＝ 1 伝票）。KDS はこの単位でカードを出します。
-- **`order_items`** が調理ステータスを持つ最小単位です。
+- **`order_items`** が調理ステータスを持つ最小単位です。`payment_id` が null なら未会計で、
+  分割会計はこの列で「どの明細をどの会計で払ったか」を表します。
+- **`payments`** は 1 セッションに複数ぶら下がります（分割会計）。
+  取り消した会計は削除せず `status = 'refunded'` として残し、売上集計から外します。
 
 営業日は `stores.business_day_cutoff_hour`（既定 5 時）で区切るため、
 深夜 2 時の売上は前日として集計されます。
@@ -152,6 +165,8 @@ stores ──┬─ restaurant_tables ── table_sessions ──┬─ orders 
 
 - **決済連携** — 現在の会計は記録のみです。カード・QR 決済は決済端末で処理し、
   その支払方法をシステムに残す運用を想定しています（Stripe 等との接続は未実装）。
+- **会計後の一部返品** — 会計全体の取消には対応していますが、
+  1 品だけ返すといった部分返品は未対応です。
 - **レシートプリンタ** — ブラウザの印刷までは対応。ESC/POS への直接出力は未対応です。
 - **複数店舗・スタッフ個人アカウント** — スキーマは `store_id` で分離済みですが、
   ログインは店舗単位の PIN です。個人別の操作履歴が必要なら Supabase Auth の導入が要ります。

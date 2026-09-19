@@ -5,17 +5,29 @@
 // ---------------------------------------------------------------------------
 
 export type PrepStation = 'kitchen' | 'bar' | 'none';
-export type SessionStatus = 'open' | 'bill_requested' | 'closed' | 'cancelled';
+/** 提供形態。持ち帰りの飲食料品にだけ軽減税率が適用される */
+export type ServiceType = 'eat_in' | 'takeout';
+export type SessionStatus =
+  | 'open'
+  | 'bill_requested'
+  | 'closed'
+  | 'cancelled'
+  /** 伝票結合で他の伝票に吸収された */
+  | 'merged';
 export type OrderChannel = 'mobile' | 'pos';
 export type OrderItemStatus = 'pending' | 'cooking' | 'ready' | 'served' | 'cancelled';
 export type PaymentMethod = 'cash' | 'card' | 'qr' | 'e_money' | 'other';
 export type PaymentStatus = 'paid' | 'refunded';
+export type CashMovementKind = 'deposit' | 'withdrawal';
 
 export interface Store {
   id: string;
   slug: string;
   name: string;
-  tax_rate: number;
+  /** 標準税率。店内飲食に適用する */
+  standard_tax_rate: number;
+  /** 軽減税率。持ち帰りの飲食料品に適用する */
+  reduced_tax_rate: number;
   tax_included: boolean;
   service_charge_rate: number;
   staff_pin_hash: string | null;
@@ -23,6 +35,10 @@ export interface Store {
   opening_note: string | null;
   business_day_cutoff_hour: number;
   timezone: string;
+  /** 適格請求書発行事業者の登録番号（例: T1234567890123） */
+  invoice_registration_number: string | null;
+  /** レジ締め時の釣銭準備金の既定値 */
+  cash_float_default: number;
   created_at: string;
   updated_at: string;
 }
@@ -57,7 +73,8 @@ export interface MenuItem {
   description: string | null;
   price: number;
   image_url: string | null;
-  tax_rate: number | null;
+  /** 持ち帰り時に軽減税率を適用できる商品か。酒類・非飲食料品は false */
+  reduced_rate_eligible: boolean;
   prep_station: PrepStation;
   is_available: boolean;
   is_sold_out: boolean;
@@ -104,6 +121,8 @@ export interface TableSession {
   table_id: string;
   guest_count: number;
   status: SessionStatus;
+  /** この卓の既定の提供形態。注文ごとに上書きできる */
+  service_type: ServiceType;
   opened_at: string;
   closed_at: string | null;
   note: string | null;
@@ -115,6 +134,7 @@ export interface Order {
   session_id: string;
   order_number: number;
   channel: OrderChannel;
+  service_type: ServiceType;
   note: string | null;
   placed_at: string;
 }
@@ -144,6 +164,8 @@ export interface OrderItem {
   created_at: string;
   updated_at: string;
   line_total: number;
+  /** 支払い済みの会計。null は未会計 */
+  payment_id: string | null;
 }
 
 export interface Payment {
@@ -161,6 +183,48 @@ export interface Payment {
   status: PaymentStatus;
   note: string | null;
   paid_at: string;
+  /** インボイスの記載要件を満たすための税率別内訳 */
+  tax_breakdown: TaxBreakdownRow[];
+  /** 人数割りのとき何分割の何番目か */
+  split_count: number;
+  split_index: number;
+  voided_at: string | null;
+  void_reason: string | null;
+}
+
+/** 税率ごとの対象額と消費税額 */
+export interface TaxBreakdownRow {
+  rate: number;
+  taxable: number;
+  tax: number;
+}
+
+export interface CashMovement {
+  id: string;
+  store_id: string;
+  business_day: string;
+  kind: CashMovementKind;
+  amount: number;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface CashDrawerClosing {
+  id: string;
+  store_id: string;
+  business_day: string;
+  opening_float: number;
+  cash_sales: number;
+  cash_in: number;
+  cash_out: number;
+  /** 理論在高 = 釣銭準備金 + 現金売上 + 入金 - 出金 */
+  expected_cash: number;
+  /** 実査額 */
+  counted_cash: number;
+  /** 実査額 - 理論在高。プラスなら過剰、マイナスなら不足 */
+  difference: number;
+  note: string | null;
+  closed_at: string;
 }
 
 /** calc_session_total() の戻り値 */
@@ -170,6 +234,7 @@ export interface SessionTotal {
   discount: number;
   tax: number;
   total: number;
+  tax_breakdown: TaxBreakdownRow[];
 }
 
 /** sales_summary() の戻り値 */
