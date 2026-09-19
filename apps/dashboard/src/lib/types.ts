@@ -958,3 +958,161 @@ export interface MenuSummary {
   sales: number;
   gross_profit: number;
 }
+
+// ---------------------------------------------------------------------------
+// P4: CRM（仕様書 §5.29〜§5.32 / §8.6）
+// ---------------------------------------------------------------------------
+
+export type CustomerGender = 'male' | 'female' | 'other' | 'unknown';
+export type CouponKind = 'benefit' | 'discount' | 'free_menu';
+export type DeliveryStatus = 'reserved' | 'draft' | 'suspended' | 'sent';
+export type DeliveryTarget = 'all' | 'filtered' | 'line_ids';
+
+export const GENDER_LABELS: Record<CustomerGender, string> = {
+  male: '男性',
+  female: '女性',
+  other: 'その他',
+  unknown: '回答しない',
+};
+
+export const COUPON_KIND_LABELS: Record<CouponKind, string> = {
+  benefit: '特典の提供',
+  discount: '割引',
+  free_menu: '無料メニュー',
+};
+
+export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
+  reserved: '予約中',
+  draft: '下書き',
+  suspended: '停止中',
+  sent: '配信済み',
+};
+
+export interface Customer {
+  id: string;
+  corporation_id: string;
+  line_user_id: string | null;
+  display_name: string | null;
+  gender: CustomerGender;
+  birth_date: string | null;
+  first_visit_at: string | null;
+  last_visit_at: string | null;
+  visit_count: number;
+  rank_name: string | null;
+}
+
+export interface LineOfficialAccount {
+  id: string;
+  company_id: string;
+  name: string;
+  channel_id: string | null;
+  monthly_quota: number;
+  friends_total: number;
+  friends_active: number;
+  blocked: number;
+}
+
+export interface Coupon {
+  id: string;
+  company_id: string;
+  kind: CouponKind;
+  name: string;
+  display_name: string | null;
+  content: string | null;
+  description: string | null;
+  terms: string | null;
+  image_url: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  valid_days: number | null;
+  discount_type_id: string | null;
+  menu_id: string | null;
+}
+
+export interface CouponPreset {
+  id: string;
+  company_id: string;
+  segment: string;
+  enabled: boolean;
+  coupon_id: string | null;
+}
+
+export interface MessageDelivery {
+  id: string;
+  company_id: string;
+  line_account_id: string | null;
+  name: string;
+  status: DeliveryStatus;
+  target_type: DeliveryTarget;
+  filter: Record<string, unknown>;
+  target_count: number;
+  max_count: number | null;
+  target_updated_at: string | null;
+  scheduled_at: string | null;
+  repeat_daily: boolean;
+}
+
+export interface MiniGame {
+  id: string;
+  company_id: string;
+  name: string;
+  enabled: boolean;
+  shop_ids: string[];
+  time_from_min: number | null;
+  time_to_min: number | null;
+  win_rate: number;
+  win_coupon_id: string | null;
+  lose_coupon_id: string | null;
+}
+
+export interface MembershipRank {
+  id: string;
+  company_id: string;
+  name: string;
+  min_visits: number;
+  coupon_id: string | null;
+  display_order: number;
+}
+
+export interface QuestionnaireAnswer {
+  id: string;
+  shop_id: string;
+  customer_id: string | null;
+  answered_at: string;
+  revisit_score: number | null;
+  service_score: number | null;
+  food_score: number | null;
+  speed_score: number | null;
+  clean_score: number | null;
+  comment: string | null;
+  gender: CustomerGender;
+  age: number | null;
+  awareness_channel: string | null;
+}
+
+export interface MenuReview {
+  id: string;
+  menu_id: string;
+  shop_id: string;
+  customer_id: string | null;
+  score: number;
+  tags: string[];
+  comment: string | null;
+  reviewed_at: string;
+}
+
+export interface EmployeeReview {
+  id: string;
+  clerk_id: string;
+  shop_id: string;
+  customer_id: string | null;
+  is_good: boolean;
+  comment: string | null;
+  reviewed_at: string;
+}
+
+export interface ShopQuestionnaireSetting {
+  shop_id: string;
+  menu_review_enabled: boolean;
+  staff_review_enabled: boolean;
+}

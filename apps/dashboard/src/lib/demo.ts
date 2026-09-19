@@ -2,6 +2,7 @@ import 'server-only';
 
 import { buildMenuMaster } from './demoMenu';
 import { buildPlanGroups, buildPlans, type PlanState } from './demoPlan';
+import { buildCrm, type CrmState } from './demoCrm';
 import { buildTransactions, type TransactionState } from './demoTransactions';
 import type {
   Account,
@@ -59,7 +60,7 @@ import type {
 
 const CORP_ID = 'corp-demo';
 
-export interface DemoState extends PlanState, TransactionState {
+export interface DemoState extends PlanState, TransactionState, CrmState {
   corporation: Corporation;
   companies: Company[];
   shops: Shop[];
@@ -397,6 +398,15 @@ function createState(): DemoState {
     ...paymentSettings,
     ...p1Rest,
     ...transactions,
+    ...buildCrm(
+      CORP_ID,
+      companies.map((c) => c.id),
+      shops.map((s) => s.id),
+      master.menus.map((m) => m.id),
+      Object.fromEntries(
+        shops.map((s) => [s.id, p1Rest.clerks.filter((c) => c.shop_id === s.id).map((c) => c.id)])
+      )
+    ),
     lineReportingBotConfigs: [],
     ...buildBiSeeds(
       CORP_ID,
@@ -453,7 +463,7 @@ function createState(): DemoState {
 // HMR でモジュールが作り直されてもデータが消えないよう globalThis に置く。
 // ただし DemoState の形を変えたときは作り直したいので、版を添えて持つ。
 // （版を上げ忘れると、古い形のまま参照して実行時エラーになる）
-const STATE_VERSION = 13;
+const STATE_VERSION = 14;
 
 const g = globalThis as typeof globalThis & {
   __dashboardDemo?: { version: number; state: DemoState };
