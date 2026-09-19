@@ -26,8 +26,26 @@ alter table public.payments                enable row level security;
 
 -- 念のため明示的に権限を剥奪する。
 -- （Supabase の既定では anon / authenticated に public スキーマの権限が付与される）
-revoke all on all tables in schema public from anon, authenticated;
-revoke all on all sequences in schema public from anon, authenticated;
+--
+-- ここで `all tables in schema public` を使わないのは意図的。
+-- 1 つの Supabase プロジェクトに別アプリのテーブルが同居している場合、
+-- その一括指定は無関係なテーブルの権限まで剥奪して他アプリを壊す。
+-- 対象は必ずこのシステムのテーブルだけに限定する。
+revoke all on table
+  public.stores,
+  public.restaurant_tables,
+  public.categories,
+  public.menu_items,
+  public.option_groups,
+  public.options,
+  public.menu_item_option_groups,
+  public.table_sessions,
+  public.orders,
+  public.order_items,
+  public.payments
+from anon, authenticated;
+
+-- 主キーはすべて uuid で serial を使っていないため、剥奪すべきシーケンスはない。
 
 -- RPC 関数もサーバー経由でのみ呼べるようにする
 revoke all on function public.open_table_session(uuid, integer)                             from anon, authenticated;
