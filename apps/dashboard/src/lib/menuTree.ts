@@ -60,7 +60,7 @@ export const POS_MENU: MenuGroup[] = [
     key: 'export',
     label: 'データ出力・連携',
     children: [
-      { key: 'csv', label: 'CSVダウンロード', href: '/aggregatedData/daily/export', feature: 'analytics', pending: true },
+      { key: 'csv', label: 'CSVダウンロード', href: '/aggregatedData/daily/export', feature: 'analytics' },
       { key: 'online-csv', label: 'モバイル決済取引CSV', href: '/onlinePaymentCsv/export', feature: 'cashless', pending: true },
     ],
   },
@@ -72,7 +72,8 @@ export const POS_MENU: MenuGroup[] = [
       { key: 'accounting', label: '会計履歴一覧', href: '/accounting/history', feature: 'accounting_history' },
       { key: 'table-usage', label: 'テーブル利用履歴', href: '/tableUsageHistory', feature: 'table_usage_history' },
       { key: 'audit', label: '重要操作履歴一覧', href: '/auditLogs', feature: 'audit_logs' },
-      { key: 'line-report', label: 'レポートくん設定', href: '/lineReportingBotConfig/active', feature: 'analytics', pending: true },
+      { key: 'terminal-payment', label: 'キャッシュレス決済履歴', href: '/terminalPayment/history', feature: 'cashless' },
+      { key: 'line-report', label: 'レポートくん設定', href: '/lineReportingBotConfig/active', feature: 'analytics' },
     ],
   },
   {
