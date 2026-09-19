@@ -16,9 +16,10 @@ import type {
 
 /** 注文 1 行ぶんの入力。価格はサーバー側で引き直すため送らせない */
 export interface OrderLineInput {
-  menu_item_id: string;
+  menu_id: string;
   quantity: number;
-  option_ids: string[];
+  /** 選択したオプションの選択肢 ID */
+  choice_ids: string[];
   note?: string;
 }
 
@@ -578,11 +579,11 @@ async function insertOrder(
   serviceType: ServiceType | null = null
 ): Promise<ActionResult> {
   const items = lines
-    .filter((line) => line.menu_item_id && line.quantity > 0)
+    .filter((line) => line.menu_id && line.quantity > 0)
     .map((line) => ({
-      menu_item_id: line.menu_item_id,
+      menu_id: line.menu_id,
       quantity: Math.floor(line.quantity),
-      option_ids: line.option_ids ?? [],
+      choice_ids: line.choice_ids ?? [],
       note: line.note ?? null,
     }));
 

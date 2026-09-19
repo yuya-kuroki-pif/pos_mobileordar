@@ -681,9 +681,9 @@ function OrderEntry({
       const result = await placePosOrder(
         sessionId,
         cart.lines.map((line) => ({
-          menu_item_id: line.menu_item_id,
+          menu_id: line.menu_id,
           quantity: line.quantity,
-          option_ids: line.option_ids,
+          choice_ids: line.option_ids,
           note: line.note,
         }))
       );

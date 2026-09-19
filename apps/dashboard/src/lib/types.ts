@@ -94,3 +94,85 @@ export interface SessionContext {
   /** ヘッダーの業態セレクタで選択中の業態 */
   currentCompanyId: string;
 }
+
+// ---------------------------------------------------------------------------
+// メニューマスター（仕様書 §8.2）。業態単位で持つ
+// ---------------------------------------------------------------------------
+
+export type MenuTypeValue = 'food' | 'drink' | 'other';
+export type ImageSize = 'large' | 'medium' | 'small' | 'hidden';
+export type TaxMethod = 'incl' | 'excl';
+
+export interface Category {
+  id: string;
+  company_id: string;
+  name: string;
+  description: string | null;
+  staff_display_name: string | null;
+  handy_bg_color: string | null;
+  kds_color: string | null;
+  display_order: number;
+  is_active: boolean;
+}
+
+export interface Menu {
+  id: string;
+  company_id: string;
+  name: string;
+  receipt_display_name: string | null;
+  staff_display_name: string | null;
+  description: string | null;
+  featured_label: string | null;
+  menu_type: MenuTypeValue;
+  image_url: string | null;
+  image_size: ImageSize;
+  tax_method: TaxMethod;
+  tax_rate: number;
+  price: number;
+  cost_price: number | null;
+  is_takeout: boolean;
+  is_free_key: boolean;
+  is_notice_only: boolean;
+  reduced_rate_eligible: boolean;
+  display_order: number;
+}
+
+export interface OptionDef {
+  id: string;
+  company_id: string;
+  name: string;
+  receipt_display_name: string | null;
+  min_choice: number;
+  max_choice: number;
+  display_order: number;
+}
+
+export interface Choice {
+  id: string;
+  option_id: string;
+  name: string;
+  receipt_display_name: string | null;
+  price: number;
+  is_default: boolean;
+  is_available: boolean;
+  display_order: number;
+}
+
+/** メニュー一覧の 1 行（仕様書 §5.2 の列） */
+export interface MenuRow extends Menu {
+  category_names: string[];
+  option_names: string[];
+  /** この業態の店舗のうち、取扱 ON になっている店舗数 */
+  dealing_shop_count: number;
+}
+
+/** カテゴリ一覧の 1 行（§5.6 の列） */
+export interface CategoryRow extends Category {
+  menu_names: string[];
+}
+
+/** オプション一覧の 1 行（§5.5 の列） */
+export interface OptionRow extends OptionDef {
+  choices: Choice[];
+  menu_names: string[];
+}

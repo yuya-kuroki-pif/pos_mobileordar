@@ -3,8 +3,16 @@ import 'server-only';
 import type {
   Account,
   AccountRole,
+  Category,
+  CategoryRow,
+  Choice,
   Company,
   Corporation,
+  Menu,
+  MenuRow,
+  MenuTypeValue,
+  OptionDef,
+  OptionRow,
   RoleDefinition,
   Shop,
   ShopGroup,
@@ -284,4 +292,172 @@ export function saveAccount(input: {
 export function setAccountStatus(accountId: string, status: Account['status']): void {
   const account = db().accounts.find((a) => a.id === accountId);
   if (account) account.status = status;
+}
+
+// ---------------------------------------------------------------------------
+// メニューマスター（デモ）
+//
+// 端末アプリのデモと同じ品揃えを、業態単位の形で持つ。
+// company-1 に串焼き系、company-2 に海鮮系を入れて、
+// 業態セレクタを切り替えたときに中身が変わることを確かめられるようにしている。
+// ---------------------------------------------------------------------------
+
+interface MenuSeed {
+  name: string;
+  price: number;
+  type: MenuTypeValue;
+  category: string;
+  reduced: boolean;
+  options?: string[];
+}
+
+const MENU_SEEDS: Record<string, { categories: string[]; options: Record<string, string[]>; menus: MenuSeed[] }> = {
+  'company-1': {
+    categories: ['串焼き', '炉端焼き', '一品料理', 'ドリンク', 'デザート'],
+    options: {
+      焼き加減: ['おまかせ', 'しっかりめ', 'レアめ'],
+      サイズ: ['レギュラー', 'メガジョッキ'],
+      トッピング: ['温玉', 'マヨネーズ', '七味', 'チーズ'],
+    },
+    menus: [
+      { name: 'もも串', price: 280, type: 'food', category: '串焼き', reduced: true, options: ['焼き加減'] },
+      { name: 'ねぎま', price: 300, type: 'food', category: '串焼き', reduced: true, options: ['焼き加減'] },
+      { name: 'つくね（卵黄付き）', price: 380, type: 'food', category: '串焼き', reduced: true },
+      { name: 'ハツ', price: 280, type: 'food', category: '串焼き', reduced: true },
+      { name: 'ホッケ開き', price: 980, type: 'food', category: '炉端焼き', reduced: true },
+      { name: 'ハマグリ酒蒸し', price: 880, type: 'food', category: '炉端焼き', reduced: true },
+      { name: 'ポテトフライ', price: 480, type: 'food', category: '一品料理', reduced: true, options: ['トッピング'] },
+      { name: 'だし巻き玉子', price: 580, type: 'food', category: '一品料理', reduced: true },
+      { name: '生ビール', price: 580, type: 'drink', category: 'ドリンク', reduced: false, options: ['サイズ'] },
+      { name: 'ハイボール', price: 480, type: 'drink', category: 'ドリンク', reduced: false },
+      { name: '烏龍茶', price: 350, type: 'drink', category: 'ドリンク', reduced: true },
+      { name: 'バニラアイス', price: 380, type: 'other', category: 'デザート', reduced: true },
+    ],
+  },
+  'company-2': {
+    categories: ['刺身', '丼もの', 'ドリンク'],
+    options: { 'わさび': ['あり', 'なし'] },
+    menus: [
+      { name: '本日の刺身盛り', price: 1280, type: 'food', category: '刺身', reduced: true, options: ['わさび'] },
+      { name: '海鮮丼', price: 1480, type: 'food', category: '丼もの', reduced: true, options: ['わさび'] },
+      { name: 'ネギトロ丼', price: 1080, type: 'food', category: '丼もの', reduced: true },
+      { name: '瓶ビール', price: 650, type: 'drink', category: 'ドリンク', reduced: false },
+      { name: '緑茶', price: 300, type: 'drink', category: 'ドリンク', reduced: true },
+    ],
+  },
+};
+
+function buildMenuMaster(companyId: string) {
+  const seed = MENU_SEEDS[companyId];
+  if (!seed) return { categories: [], menus: [], options: [], choices: [], catLinks: [], optLinks: [] };
+
+  const categories: Category[] = seed.categories.map((name, i) => ({
+    id: `${companyId}-cat-${i + 1}`,
+    company_id: companyId,
+    name,
+    description: null,
+    staff_display_name: null,
+    handy_bg_color: null,
+    kds_color: null,
+    display_order: (i + 1) * 10,
+    is_active: true,
+  }));
+
+  const options: OptionDef[] = Object.keys(seed.options).map((name, i) => ({
+    id: `${companyId}-opt-${i + 1}`,
+    company_id: companyId,
+    name,
+    receipt_display_name: name,
+    min_choice: name === 'サイズ' ? 1 : 0,
+    max_choice: name === 'トッピング' ? 3 : 1,
+    display_order: (i + 1) * 10,
+  }));
+
+  const choices: Choice[] = Object.entries(seed.options).flatMap(([optionName, names], oi) =>
+    names.map((name, ci) => ({
+      id: `${companyId}-ch-${oi + 1}-${ci + 1}`,
+      option_id: `${companyId}-opt-${oi + 1}`,
+      name,
+      receipt_display_name: name,
+      // メガジョッキだけ加算がある
+      price: name === 'メガジョッキ' ? 250 : name === '温玉' ? 100 : name === 'チーズ' ? 150 : 0,
+      is_default: ci === 0,
+      is_available: true,
+      display_order: (ci + 1) * 10,
+    }))
+  );
+
+  const menus: Menu[] = seed.menus.map((m, i) => ({
+    id: `${companyId}-menu-${i + 1}`,
+    company_id: companyId,
+    name: m.name,
+    receipt_display_name: m.name,
+    staff_display_name: null,
+    description: null,
+    featured_label: null,
+    menu_type: m.type,
+    image_url: null,
+    image_size: 'medium',
+    tax_method: 'incl',
+    tax_rate: 0.1,
+    price: m.price,
+    cost_price: null,
+    is_takeout: false,
+    is_free_key: false,
+    is_notice_only: false,
+    reduced_rate_eligible: m.reduced,
+    display_order: (i + 1) * 10,
+  }));
+
+  const catLinks = seed.menus.map((m, i) => ({
+    category_id: categories.find((c) => c.name === m.category)!.id,
+    menu_id: `${companyId}-menu-${i + 1}`,
+  }));
+
+  const optLinks = seed.menus.flatMap((m, i) =>
+    (m.options ?? []).map((name) => ({
+      menu_id: `${companyId}-menu-${i + 1}`,
+      option_id: options.find((o) => o.name === name)!.id,
+    }))
+  );
+
+  return { categories, menus, options, choices, catLinks, optLinks };
+}
+
+export function getMenuRows(companyId: string): MenuRow[] {
+  const { menus, categories, options, catLinks, optLinks } = buildMenuMaster(companyId);
+  const shopCount = db().shops.filter((s) => s.company_id === companyId).length;
+
+  return menus.map((menu) => ({
+    ...menu,
+    category_names: catLinks
+      .filter((l) => l.menu_id === menu.id)
+      .map((l) => categories.find((c) => c.id === l.category_id)?.name ?? ''),
+    option_names: optLinks
+      .filter((l) => l.menu_id === menu.id)
+      .map((l) => options.find((o) => o.id === l.option_id)?.name ?? ''),
+    // デモでは全店舗が全品を扱っているものとする
+    dealing_shop_count: shopCount,
+  }));
+}
+
+export function getCategoryRows(companyId: string): CategoryRow[] {
+  const { categories, menus, catLinks } = buildMenuMaster(companyId);
+  return categories.map((category) => ({
+    ...category,
+    menu_names: catLinks
+      .filter((l) => l.category_id === category.id)
+      .map((l) => menus.find((m) => m.id === l.menu_id)?.name ?? ''),
+  }));
+}
+
+export function getOptionRows(companyId: string): OptionRow[] {
+  const { options, choices, menus, optLinks } = buildMenuMaster(companyId);
+  return options.map((option) => ({
+    ...option,
+    choices: choices.filter((c) => c.option_id === option.id),
+    menu_names: optLinks
+      .filter((l) => l.option_id === option.id)
+      .map((l) => menus.find((m) => m.id === l.menu_id)?.name ?? ''),
+  }));
 }

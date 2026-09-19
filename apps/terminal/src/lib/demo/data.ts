@@ -30,6 +30,8 @@ export interface DemoState {
   optionGroups: OptionGroup[];
   options: MenuOption[];
   itemOptionGroups: { menu_item_id: string; option_group_id: string; sort_order: number }[];
+  /** カテゴリとメニューの紐付け（DB の category_menus） */
+  categoryMenus: { category_id: string; menu_id: string }[];
   sessions: TableSession[];
   orders: Order[];
   orderItems: OrderItem[];
@@ -50,6 +52,7 @@ export function createDemoState(): DemoState {
 
   const store: Store = {
     id: STORE_ID,
+    company_id: 'company-demo',
     slug: 'demo',
     name: '炭火焼き デモ店',
     standard_tax_rate: 0.1,
@@ -97,10 +100,11 @@ export function createDemoState(): DemoState {
     ['デザート', null],
   ].map(([name, description], index) => ({
     id: `cat-${index + 1}`,
-    store_id: STORE_ID,
+    company_id: store.company_id,
     name: name as string,
     description: description as string | null,
-    sort_order: (index + 1) * 10,
+    staff_display_name: null,
+    display_order: (index + 1) * 10,
     is_active: true,
     created_at: store.created_at,
   }));
@@ -109,6 +113,7 @@ export function createDemoState(): DemoState {
 
   let itemSeq = 0;
   const menuItems: MenuItem[] = [];
+  const categoryMenus: { category_id: string; menu_id: string }[] = [];
 
   function addItem(
     category: Category,
@@ -122,21 +127,25 @@ export function createDemoState(): DemoState {
     itemSeq += 1;
     const item: MenuItem = {
       id: `item-${itemSeq}`,
-      store_id: STORE_ID,
-      category_id: category.id,
+      company_id: store.company_id,
       name,
+      receipt_display_name: name,
       description,
       price,
       image_url: null,
+      menu_type: prepStation === 'bar' ? 'drink' : 'food',
+      tax_rate: 0.1,
       reduced_rate_eligible: reducedEligible,
+      is_notice_only: false,
       prep_station: prepStation,
-      is_available: true,
-      is_sold_out: false,
-      sort_order: itemSeq * 10,
+      display_order: itemSeq * 10,
       created_at: store.created_at,
       updated_at: store.created_at,
+      is_available: true,
+      is_sold_out: false,
     };
     menuItems.push(item);
+    categoryMenus.push({ category_id: category.id, menu_id: item.id });
     return item;
   }
 
@@ -175,21 +184,21 @@ export function createDemoState(): DemoState {
   hamaguri.is_sold_out = true;
 
   const optionGroups: OptionGroup[] = [
-    { id: 'grp-yaki', store_id: STORE_ID, name: '焼き加減', min_select: 0, max_select: 1, sort_order: 10 },
-    { id: 'grp-size', store_id: STORE_ID, name: 'サイズ', min_select: 1, max_select: 1, sort_order: 20 },
-    { id: 'grp-top', store_id: STORE_ID, name: 'トッピング', min_select: 0, max_select: 3, sort_order: 30 },
+    { id: 'grp-yaki', company_id: store.company_id, name: '焼き加減', min_choice: 0, max_choice: 1, display_order: 10 },
+    { id: 'grp-size', company_id: store.company_id, name: 'サイズ', min_choice: 1, max_choice: 1, display_order: 20 },
+    { id: 'grp-top', company_id: store.company_id, name: 'トッピング', min_choice: 0, max_choice: 3, display_order: 30 },
   ];
 
   const options: MenuOption[] = [
-    { id: 'opt-yaki-1', group_id: 'grp-yaki', name: 'おまかせ', price_delta: 0, sort_order: 10, is_available: true },
-    { id: 'opt-yaki-2', group_id: 'grp-yaki', name: 'しっかりめ', price_delta: 0, sort_order: 20, is_available: true },
-    { id: 'opt-yaki-3', group_id: 'grp-yaki', name: 'レアめ', price_delta: 0, sort_order: 30, is_available: true },
-    { id: 'opt-size-1', group_id: 'grp-size', name: 'レギュラー', price_delta: 0, sort_order: 10, is_available: true },
-    { id: 'opt-size-2', group_id: 'grp-size', name: 'メガジョッキ', price_delta: 250, sort_order: 20, is_available: true },
-    { id: 'opt-top-1', group_id: 'grp-top', name: '温玉', price_delta: 100, sort_order: 10, is_available: true },
-    { id: 'opt-top-2', group_id: 'grp-top', name: 'マヨネーズ', price_delta: 50, sort_order: 20, is_available: true },
-    { id: 'opt-top-3', group_id: 'grp-top', name: '七味', price_delta: 0, sort_order: 30, is_available: true },
-    { id: 'opt-top-4', group_id: 'grp-top', name: 'チーズ', price_delta: 150, sort_order: 40, is_available: true },
+    { id: 'opt-yaki-1', option_id: 'grp-yaki', name: 'おまかせ', price: 0, display_order: 10, is_available: true, is_default: false },
+    { id: 'opt-yaki-2', option_id: 'grp-yaki', name: 'しっかりめ', price: 0, display_order: 20, is_available: true, is_default: false },
+    { id: 'opt-yaki-3', option_id: 'grp-yaki', name: 'レアめ', price: 0, display_order: 30, is_available: true, is_default: false },
+    { id: 'opt-size-1', option_id: 'grp-size', name: 'レギュラー', price: 0, display_order: 10, is_available: true, is_default: false },
+    { id: 'opt-size-2', option_id: 'grp-size', name: 'メガジョッキ', price: 250, display_order: 20, is_available: true, is_default: false },
+    { id: 'opt-top-1', option_id: 'grp-top', name: '温玉', price: 100, display_order: 10, is_available: true, is_default: false },
+    { id: 'opt-top-2', option_id: 'grp-top', name: 'マヨネーズ', price: 50, display_order: 20, is_available: true, is_default: false },
+    { id: 'opt-top-3', option_id: 'grp-top', name: '七味', price: 0, display_order: 30, is_available: true, is_default: false },
+    { id: 'opt-top-4', option_id: 'grp-top', name: 'チーズ', price: 150, display_order: 40, is_available: true, is_default: false },
   ];
 
   const itemOptionGroups = [
@@ -253,7 +262,7 @@ export function createDemoState(): DemoState {
         store_id: STORE_ID,
         order_id: order.id,
         session_id: session.id,
-        menu_item_id: line.item.id,
+        menu_id: line.item.id,
         name_snapshot: line.item.name,
         unit_price: line.item.price,
         options_price: optionsPrice,
@@ -467,6 +476,7 @@ export function createDemoState(): DemoState {
     itemOptionGroups,
     sessions,
     orders,
+    categoryMenus,
     orderItems,
     payments,
     cashMovements,

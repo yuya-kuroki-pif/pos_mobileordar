@@ -14,5 +14,8 @@ export default async function MenuAdminPage() {
     getUncategorizedItems(store.id),
   ]);
 
-  return <MenuManager menu={menu} uncategorized={uncategorized} />;
+  // 端末からダッシュボードの編集画面へ飛べるようにする
+  const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL ?? 'http://localhost:3000';
+
+  return <MenuManager menu={menu} uncategorized={uncategorized} dashboardUrl={dashboardUrl} />;
 }

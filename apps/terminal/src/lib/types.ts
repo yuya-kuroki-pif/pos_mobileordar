@@ -20,8 +20,11 @@ export type PaymentMethod = 'cash' | 'card' | 'qr' | 'e_money' | 'other';
 export type PaymentStatus = 'paid' | 'refunded';
 export type CashMovementKind = 'deposit' | 'withdrawal';
 
+/** DB の shops テーブル。業態（company）配下にぶら下がる */
 export interface Store {
   id: string;
+  /** 所属する業態。メニューマスターはこの単位で持つ */
+  company_id: string;
   slug: string;
   name: string;
   /** 標準税率。店内飲食に適用する */
@@ -57,47 +60,64 @@ export interface RestaurantTable {
 
 export interface Category {
   id: string;
-  store_id: string;
+  /** メニューマスターは業態単位（仕様書 §8.2） */
+  company_id: string;
   name: string;
   description: string | null;
-  sort_order: number;
+  staff_display_name: string | null;
+  display_order: number;
   is_active: boolean;
   created_at: string;
 }
 
+/** DB の menus テーブル。業態単位で持つ（仕様書 §8.2） */
 export interface MenuItem {
   id: string;
-  store_id: string;
-  category_id: string | null;
+  company_id: string;
   name: string;
+  receipt_display_name: string | null;
   description: string | null;
   price: number;
   image_url: string | null;
+  menu_type: MenuTypeValue;
+  /** 商品ごとの税率。持ち帰りの軽減税率は reduced_rate_eligible で上書きする */
+  tax_rate: number;
   /** 持ち帰り時に軽減税率を適用できる商品か。酒類・非飲食料品は false */
   reduced_rate_eligible: boolean;
+  /** 説明文だけを置く、注文できないメニュー（§5.6 の「ご案内」） */
+  is_notice_only: boolean;
   prep_station: PrepStation;
-  is_available: boolean;
-  is_sold_out: boolean;
-  sort_order: number;
+  display_order: number;
   created_at: string;
   updated_at: string;
+
+  // --- 店舗ごとの取扱設定（shop_menus）から合成する ---
+  /** 店舗が扱っていて、スタッフ・お客様に見せる状態か */
+  is_available: boolean;
+  /** 在庫なし（売切） */
+  is_sold_out: boolean;
 }
 
+export type MenuTypeValue = 'food' | 'drink' | 'other';
+
+/** DB の options テーブル（オプションのまとまり） */
 export interface OptionGroup {
   id: string;
-  store_id: string;
+  company_id: string;
   name: string;
-  min_select: number;
-  max_select: number;
-  sort_order: number;
+  min_choice: number;
+  max_choice: number;
+  display_order: number;
 }
 
+/** DB の choices テーブル（オプションの選択肢） */
 export interface MenuOption {
   id: string;
-  group_id: string;
+  option_id: string;
   name: string;
-  price_delta: number;
-  sort_order: number;
+  price: number;
+  is_default: boolean;
+  display_order: number;
   is_available: boolean;
 }
 
@@ -151,7 +171,7 @@ export interface OrderItem {
   store_id: string;
   order_id: string;
   session_id: string;
-  menu_item_id: string | null;
+  menu_id: string | null;
   name_snapshot: string;
   unit_price: number;
   options_price: number;
@@ -280,7 +300,7 @@ export interface KdsItem extends OrderItem {
 export interface CartLine {
   /** カート内での一意キー。同じ商品でもオプションが違えば別行にする */
   key: string;
-  menu_item_id: string;
+  menu_id: string;
   name: string;
   unit_price: number;
   quantity: number;

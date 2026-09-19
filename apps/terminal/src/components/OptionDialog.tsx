@@ -28,7 +28,7 @@ export function OptionDialog({
   const [selected, setSelected] = useState<string[]>(() =>
     // 必須グループは先頭の選択肢を初期選択にして、迷わず進めるようにする
     item.option_groups.flatMap((group) =>
-      group.min_select > 0 && group.options[0] ? [group.options[0].id] : []
+      group.min_choice > 0 && group.options[0] ? [group.options[0].id] : []
     )
   );
   const [quantity, setQuantity] = useState(1);
@@ -66,7 +66,7 @@ export function OptionDialog({
               <fieldset key={group.id} className="mb-5">
                 <legend className="mb-2 flex w-full items-center gap-2">
                   <span className="font-bold text-charcoal-800">{group.name}</span>
-                  {group.min_select > 0 ? (
+                  {group.min_choice > 0 ? (
                     <span className="rounded bg-ember-100 px-1.5 py-0.5 text-[11px] font-bold text-ember-700">
                       必須
                     </span>
@@ -75,9 +75,9 @@ export function OptionDialog({
                       任意
                     </span>
                   )}
-                  {group.max_select > 1 && (
+                  {group.max_choice > 1 && (
                     <span className="text-xs text-charcoal-400">
-                      {chosen}/{group.max_select} 選択
+                      {chosen}/{group.max_choice} 選択
                     </span>
                   )}
                 </legend>
@@ -103,11 +103,11 @@ export function OptionDialog({
                       >
                         <span className="font-medium">{option.name}</span>
                         <span className="tabular text-sm text-charcoal-500">
-                          {option.price_delta === 0
+                          {option.price === 0
                             ? ''
-                            : option.price_delta > 0
-                              ? `+${formatYen(option.price_delta)}`
-                              : `-${formatYen(-option.price_delta)}`}
+                            : option.price > 0
+                              ? `+${formatYen(option.price)}`
+                              : `-${formatYen(-option.price)}`}
                         </span>
                       </button>
                     );

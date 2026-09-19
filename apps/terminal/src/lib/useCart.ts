@@ -8,8 +8,8 @@ import type { CartLine, MenuItemWithOptions, MenuOption, SelectedOption } from '
  * 同じ商品でもオプションや備考が違えば別行として扱いたいので、
  * それらをまとめたキーで同一性を判定する。
  */
-function lineKey(menuItemId: string, optionIds: string[], note: string): string {
-  return [menuItemId, [...optionIds].sort().join('+'), note].join('|');
+function lineKey(menuId: string, optionIds: string[], note: string): string {
+  return [menuId, [...optionIds].sort().join('+'), note].join('|');
 }
 
 /** 商品 + 選択済みオプションから 1 行ぶんのカート行を作る */
@@ -25,14 +25,14 @@ export function buildCartLine(
   for (const group of item.option_groups) {
     for (const option of group.options) {
       if (!selectedIds.includes(option.id)) continue;
-      labels.push({ group: group.name, name: option.name, price_delta: option.price_delta });
-      optionsPrice += option.price_delta;
+      labels.push({ group: group.name, name: option.name, price_delta: option.price });
+      optionsPrice += option.price;
     }
   }
 
   return {
     key: lineKey(item.id, selectedIds, note),
-    menu_item_id: item.id,
+    menu_id: item.id,
     name: item.name,
     unit_price: item.price,
     quantity,
@@ -93,20 +93,20 @@ export function useCart() {
 export function toggleOption(
   selected: string[],
   option: MenuOption,
-  group: { id: string; max_select: number },
+  group: { id: string; max_choice: number },
   groupOptionIds: string[]
 ): string[] {
   const isSelected = selected.includes(option.id);
 
   if (isSelected) return selected.filter((id) => id !== option.id);
 
-  if (group.max_select === 1) {
+  if (group.max_choice === 1) {
     // 同じグループの他の選択肢を外してから入れ替える
     return [...selected.filter((id) => !groupOptionIds.includes(id)), option.id];
   }
 
   const countInGroup = selected.filter((id) => groupOptionIds.includes(id)).length;
-  if (countInGroup >= group.max_select) return selected; // 上限に達していたら無視
+  if (countInGroup >= group.max_choice) return selected; // 上限に達していたら無視
 
   return [...selected, option.id];
 }
@@ -116,6 +116,6 @@ export function isSelectionValid(item: MenuItemWithOptions, selected: string[]):
   return item.option_groups.every((group) => {
     const ids = group.options.map((o) => o.id);
     const chosen = selected.filter((id) => ids.includes(id)).length;
-    return chosen >= group.min_select;
+    return chosen >= group.min_choice;
   });
 }

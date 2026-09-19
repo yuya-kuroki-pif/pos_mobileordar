@@ -156,73 +156,132 @@ export async function getMenuTree(
 
   const db = supabaseAdmin();
 
-  let itemQuery = db.from('menu_items').select('*').eq('store_id', storeId).order('sort_order');
-  if (onlyOrderable) itemQuery = itemQuery.eq('is_available', true);
+  const shop = await getStoreById(storeId);
+  if (!shop) return [];
 
-  const [catRes, itemRes, groupRes, optionRes, linkRes] = await Promise.all([
-    db.from('categories').select('*').eq('store_id', storeId).eq('is_active', true).order('sort_order'),
-    itemQuery,
-    db.from('option_groups').select('*').eq('store_id', storeId).order('sort_order'),
-    db.from('options').select('*').eq('is_available', true).order('sort_order'),
-    db.from('menu_item_option_groups').select('*').order('sort_order'),
-  ]);
+  // マスターは業態単位、扱いは店舗単位。両方を引いて突き合わせる
+  const [catRes, menuRes, dealRes, linkRes, optionRes, choiceRes, menuOptionRes] =
+    await Promise.all([
+      db.from('categories').select('*').eq('company_id', shop.company_id).eq('is_active', true).order('display_order'),
+      db.from('menus').select('*').eq('company_id', shop.company_id).order('display_order'),
+      db.from('shop_menus').select('*').eq('shop_id', storeId),
+      db.from('category_menus').select('category_id, menu_id, display_order').order('display_order'),
+      db.from('options').select('*').eq('company_id', shop.company_id).order('display_order'),
+      db.from('choices').select('*').eq('is_available', true).order('display_order'),
+      db.from('menu_options').select('menu_id, option_id, display_order').order('display_order'),
+    ]);
 
-  for (const res of [catRes, itemRes, groupRes, optionRes, linkRes]) {
+  for (const res of [catRes, menuRes, dealRes, linkRes, optionRes, choiceRes, menuOptionRes]) {
     if (res.error) throw new Error(res.error.message);
   }
 
+  type MenuRow = Omit<MenuItem, 'is_available' | 'is_sold_out'>;
+  type DealRow = {
+    menu_id: string;
+    is_dealing: boolean;
+    is_visible_customer: boolean;
+    is_visible_staff: boolean;
+    in_stock: boolean;
+  };
+
   const categories = (catRes.data ?? []) as Category[];
-  const items = (itemRes.data ?? []) as MenuItem[];
-  const groups = (groupRes.data ?? []) as OptionGroup[];
-  const options = (optionRes.data ?? []) as MenuOption[];
-  const links = (linkRes.data ?? []) as {
-    menu_item_id: string;
-    option_group_id: string;
-    sort_order: number;
-  }[];
+  const menuRows = (menuRes.data ?? []) as MenuRow[];
+  const deals = (dealRes.data ?? []) as DealRow[];
+  const links = (linkRes.data ?? []) as { category_id: string; menu_id: string }[];
+  const options = (optionRes.data ?? []) as OptionGroup[];
+  const choices = (choiceRes.data ?? []) as MenuOption[];
+  const menuOptions = (menuOptionRes.data ?? []) as { menu_id: string; option_id: string }[];
 
-  const optionsByGroup = new Map<string, MenuOption[]>();
-  for (const option of options) {
-    const list = optionsByGroup.get(option.group_id) ?? [];
-    list.push(option);
-    optionsByGroup.set(option.group_id, list);
+  const dealByMenu = new Map(deals.map((d) => [d.menu_id, d]));
+
+  const choicesByOption = new Map<string, MenuOption[]>();
+  for (const choice of choices) {
+    const list = choicesByOption.get(choice.option_id) ?? [];
+    list.push(choice);
+    choicesByOption.set(choice.option_id, list);
   }
 
-  const groupById = new Map(groups.map((g) => [g.id, g]));
+  const optionById = new Map(options.map((o) => [o.id, o]));
+  const optionsByMenu = new Map<string, MenuItemWithOptions['option_groups']>();
+  for (const link of menuOptions) {
+    const option = optionById.get(link.option_id);
+    if (!option) continue;
+    const list = optionsByMenu.get(link.menu_id) ?? [];
+    list.push({ ...option, options: choicesByOption.get(option.id) ?? [] });
+    optionsByMenu.set(link.menu_id, list);
+  }
 
-  const groupsByItem = new Map<string, MenuItemWithOptions['option_groups']>();
+  const items: MenuItemWithOptions[] = menuRows
+    .map((menu) => {
+      const deal = dealByMenu.get(menu.id);
+      return {
+        ...menu,
+        // 店舗が扱っていて、スタッフにも出す設定なら注文できる
+        is_available: Boolean(deal?.is_dealing && deal?.is_visible_staff),
+        is_sold_out: deal ? !deal.in_stock : true,
+        option_groups: optionsByMenu.get(menu.id) ?? [],
+      };
+    })
+    .filter((item) => (onlyOrderable ? item.is_available && !item.is_notice_only : true));
+
+  const menusByCategory = new Map<string, MenuItemWithOptions[]>();
   for (const link of links) {
-    const group = groupById.get(link.option_group_id);
-    if (!group) continue; // 他店舗のグループ（リンクは全店舗ぶん取得しているため）
-    const list = groupsByItem.get(link.menu_item_id) ?? [];
-    list.push({ ...group, options: optionsByGroup.get(group.id) ?? [] });
-    groupsByItem.set(link.menu_item_id, list);
+    const item = items.find((i) => i.id === link.menu_id);
+    if (!item) continue;
+    const list = menusByCategory.get(link.category_id) ?? [];
+    list.push(item);
+    menusByCategory.set(link.category_id, list);
   }
-
-  const itemsWithOptions: MenuItemWithOptions[] = items.map((item) => ({
-    ...item,
-    option_groups: groupsByItem.get(item.id) ?? [],
-  }));
 
   return categories.map((category) => ({
     ...category,
-    items: itemsWithOptions.filter((item) => item.category_id === category.id),
+    items: menusByCategory.get(category.id) ?? [],
   }));
 }
 
-/** カテゴリ未設定の商品。管理画面で編集できるよう別に取得する */
+/** どのカテゴリにも属していないメニュー。管理画面で編集できるよう別に取得する */
 export async function getUncategorizedItems(storeId: string): Promise<MenuItem[]> {
   if (isDemoMode()) return demo.getUncategorizedItems();
 
-  const { data, error } = await supabaseAdmin()
-    .from('menu_items')
-    .select('*')
-    .eq('store_id', storeId)
-    .is('category_id', null)
-    .order('sort_order');
+  const db = supabaseAdmin();
+  const shop = await getStoreById(storeId);
+  if (!shop) return [];
 
-  if (error) throw new Error(error.message);
-  return (data ?? []) as MenuItem[];
+  const [menuRes, linkRes, dealRes] = await Promise.all([
+    db.from('menus').select('*').eq('company_id', shop.company_id).order('display_order'),
+    db.from('category_menus').select('menu_id'),
+    db
+      .from('shop_menus')
+      .select('menu_id, is_dealing, is_visible_staff, in_stock')
+      .eq('shop_id', storeId),
+  ]);
+
+  for (const res of [menuRes, linkRes, dealRes]) {
+    if (res.error) throw new Error(res.error.message);
+  }
+
+  const linked = new Set(((linkRes.data ?? []) as { menu_id: string }[]).map((l) => l.menu_id));
+  const deals = new Map(
+    (
+      (dealRes.data ?? []) as {
+        menu_id: string;
+        is_dealing: boolean;
+        is_visible_staff: boolean;
+        in_stock: boolean;
+      }[]
+    ).map((d) => [d.menu_id, d])
+  );
+
+  return ((menuRes.data ?? []) as Omit<MenuItem, 'is_available' | 'is_sold_out'>[])
+    .filter((menu) => !linked.has(menu.id))
+    .map((menu) => {
+      const deal = deals.get(menu.id);
+      return {
+        ...menu,
+        is_available: Boolean(deal?.is_dealing && deal?.is_visible_staff),
+        is_sold_out: deal ? !deal.in_stock : true,
+      };
+    });
 }
 
 // ---------------------------------------------------------------------------

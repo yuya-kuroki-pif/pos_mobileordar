@@ -35,148 +35,31 @@ function text(form: FormData, key: string): string {
 }
 
 // ===========================================================================
-// カテゴリ
+// メニュー
+//
+// メニューマスターの登録・編集は業態単位の話なので、管理ダッシュボード
+// （apps/dashboard の /menu）が担当する。端末に残すのは、営業中に店舗が
+// 判断する「売切」の切り替えだけ（仕様書 §5.13 の取扱メニュー一覧にあたる）。
 // ===========================================================================
 
-export async function saveCategory(formData: FormData): Promise<ActionResult> {
-  try {
-    const storeId = await requireStoreId();
-    const id = text(formData, 'id');
-    const name = text(formData, 'name');
-    if (!name) return { ok: false, error: 'カテゴリ名を入力してください。' };
-
-    const payload = {
-      name,
-      description: text(formData, 'description') || null,
-      sort_order: num(formData, 'sort_order'),
-      is_active: formData.get('is_active') !== null,
-    };
-
-    if (isDemoMode()) {
-      demo.saveCategory({ id, ...payload });
-    } else {
-      const db = supabaseAdmin();
-      const row = { store_id: storeId, ...payload };
-      const { error } = id
-        ? await db.from('categories').update(row).eq('id', id).eq('store_id', storeId)
-        : await db.from('categories').insert(row);
-      if (error) throw error;
-    }
-
-    revalidatePath('/admin/menu');
-    return { ok: true };
-  } catch (error) {
-    return fail(error);
-  }
-}
-
-export async function deleteCategory(id: string): Promise<ActionResult> {
+/** 売切トグル。店舗ごとの在庫状態（shop_menus.in_stock）を切り替える */
+export async function toggleSoldOut(menuId: string, soldOut: boolean): Promise<ActionResult> {
   try {
     const storeId = await requireStoreId();
 
     if (isDemoMode()) {
-      demo.deleteCategory(id);
-    } else {
-      // 商品は category_id が null になるだけで消えない（on delete set null）
-      const { error } = await supabaseAdmin()
-        .from('categories')
-        .delete()
-        .eq('id', id)
-        .eq('store_id', storeId);
-      if (error) throw error;
-    }
-
-    revalidatePath('/admin/menu');
-    return { ok: true };
-  } catch (error) {
-    return fail(error);
-  }
-}
-
-// ===========================================================================
-// 商品
-// ===========================================================================
-
-export async function saveMenuItem(formData: FormData): Promise<ActionResult> {
-  try {
-    const storeId = await requireStoreId();
-    const id = text(formData, 'id');
-    const name = text(formData, 'name');
-    if (!name) return { ok: false, error: '商品名を入力してください。' };
-
-    const payload = {
-      category_id: text(formData, 'category_id') || null,
-      name,
-      description: text(formData, 'description') || null,
-      price: Math.max(0, Math.round(num(formData, 'price'))),
-      image_url: text(formData, 'image_url') || null,
-      prep_station: (text(formData, 'prep_station') || 'kitchen') as PrepStation,
-      is_available: formData.get('is_available') !== null,
-      is_sold_out: formData.get('is_sold_out') !== null,
-      sort_order: num(formData, 'sort_order'),
-      // 酒類・非飲食料品はチェックを外す。持ち帰りでも標準税率になる
-      reduced_rate_eligible: formData.get('reduced_rate_eligible') !== null,
-    };
-
-    if (isDemoMode()) {
-      demo.saveMenuItem({ id, ...payload });
-    } else {
-      const db = supabaseAdmin();
-      const row = { store_id: storeId, ...payload };
-      const { error } = id
-        ? await db.from('menu_items').update(row).eq('id', id).eq('store_id', storeId)
-        : await db.from('menu_items').insert(row);
-      if (error) throw error;
-    }
-
-    revalidatePath('/admin/menu');
-    return { ok: true };
-  } catch (error) {
-    return fail(error);
-  }
-}
-
-/** 売切トグル。営業中に一番よく使う操作なので単独で用意する */
-export async function toggleSoldOut(id: string, soldOut: boolean): Promise<ActionResult> {
-  try {
-    const storeId = await requireStoreId();
-
-    if (isDemoMode()) {
-      demo.toggleSoldOut(id, soldOut);
+      demo.toggleSoldOut(menuId, soldOut);
     } else {
       const { error } = await supabaseAdmin()
-        .from('menu_items')
-        .update({ is_sold_out: soldOut })
-        .eq('id', id)
-        .eq('store_id', storeId);
+        .from('shop_menus')
+        .update({ in_stock: !soldOut })
+        .eq('menu_id', menuId)
+        .eq('shop_id', storeId);
       if (error) throw error;
     }
 
     revalidatePath('/admin/menu');
     revalidatePath('/pos');
-    return { ok: true };
-  } catch (error) {
-    return fail(error);
-  }
-}
-
-export async function deleteMenuItem(id: string): Promise<ActionResult> {
-  try {
-    const storeId = await requireStoreId();
-
-    if (isDemoMode()) {
-      demo.deleteMenuItem(id);
-    } else {
-      // 過去の注文明細は name_snapshot を持っているので、商品を消しても伝票は壊れない
-      const { error } = await supabaseAdmin()
-        .from('menu_items')
-        .delete()
-        .eq('id', id)
-        .eq('store_id', storeId);
-      if (error) throw error;
-    }
-
-    revalidatePath('/admin/menu');
     return { ok: true };
   } catch (error) {
     return fail(error);

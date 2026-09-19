@@ -131,29 +131,35 @@ export function getMenuTree(onlyOrderable: boolean): CategoryWithItems[] {
     list.push({
       ...clone(group),
       options: clone(
-        state.options.filter((o) => o.group_id === group.id && o.is_available)
-      ).sort((a, b) => a.sort_order - b.sort_order),
+        state.options.filter((o) => o.option_id === group.id && o.is_available)
+      ).sort((a, b) => a.display_order - b.display_order),
     });
     groupsByItem.set(link.menu_item_id, list);
   }
 
   const items: MenuItemWithOptions[] = state.menuItems
-    .filter((item) => (onlyOrderable ? item.is_available : true))
-    .sort((a, b) => a.sort_order - b.sort_order)
+    .filter((item) => (onlyOrderable ? item.is_available && !item.is_notice_only : true))
+    .sort((a, b) => a.display_order - b.display_order)
     .map((item) => ({ ...clone(item), option_groups: groupsByItem.get(item.id) ?? [] }));
 
+  // カテゴリとメニューは多対多（category_menus）
   return state.categories
     .filter((category) => category.is_active)
-    .sort((a, b) => a.sort_order - b.sort_order)
+    .sort((a, b) => a.display_order - b.display_order)
     .map((category) => ({
       ...clone(category),
-      items: items.filter((item) => item.category_id === category.id),
+      items: state.categoryMenus
+        .filter((link) => link.category_id === category.id)
+        .map((link) => items.find((item) => item.id === link.menu_id))
+        .filter((item): item is MenuItemWithOptions => Boolean(item)),
     }));
 }
 
 export function getUncategorizedItems(): MenuItem[] {
-  return clone(db().menuItems.filter((item) => item.category_id === null)).sort(
-    (a, b) => a.sort_order - b.sort_order
+  const state = db();
+  const linked = new Set(state.categoryMenus.map((link) => link.menu_id));
+  return clone(state.menuItems.filter((item) => !linked.has(item.id))).sort(
+    (a, b) => a.display_order - b.display_order
   );
 }
 
@@ -419,9 +425,10 @@ export function openTableSession(
 }
 
 export interface DemoOrderLine {
-  menu_item_id: string;
+  menu_id: string;
   quantity: number;
-  option_ids: string[];
+  /** 選択したオプションの選択肢 ID */
+  choice_ids: string[];
   note?: string | null;
 }
 
@@ -470,24 +477,25 @@ export function placeOrder(
 
   for (const line of lines) {
     // 価格はクライアントから受け取らず、必ずメニューから引き直す
-    const menuItem = state.menuItems.find((m) => m.id === line.menu_item_id);
+    const menuItem = state.menuItems.find((m) => m.id === line.menu_id);
     if (!menuItem) throw new Error('商品が見つかりません');
+    if (menuItem.is_notice_only) throw new Error(`「${menuItem.name}」は注文できません`);
     if (!menuItem.is_available || menuItem.is_sold_out) {
       throw new Error(`「${menuItem.name}」は現在ご注文いただけません`);
     }
 
     const selected: SelectedOption[] = [];
     let optionsPrice = 0;
-    for (const optionId of line.option_ids) {
-      const option = state.options.find((o) => o.id === optionId && o.is_available);
-      if (!option) continue;
-      const group = state.optionGroups.find((g) => g.id === option.group_id);
+    for (const choiceId of line.choice_ids) {
+      const choice = state.options.find((o) => o.id === choiceId && o.is_available);
+      if (!choice) continue;
+      const group = state.optionGroups.find((g) => g.id === choice.option_id);
       selected.push({
         group: group?.name ?? '',
-        name: option.name,
-        price_delta: option.price_delta,
+        name: choice.name,
+        price_delta: choice.price,
       });
-      optionsPrice += option.price_delta;
+      optionsPrice += choice.price;
     }
 
     const quantity = Math.max(1, Math.floor(line.quantity));
@@ -496,7 +504,7 @@ export function placeOrder(
       store_id: state.store.id,
       order_id: order.id,
       session_id: sessionId,
-      menu_item_id: menuItem.id,
+      menu_id: menuItem.id,
       name_snapshot: menuItem.name,
       unit_price: menuItem.price,
       options_price: optionsPrice,
@@ -506,7 +514,7 @@ export function placeOrder(
       tax_rate:
         effectiveServiceType === 'takeout' && menuItem.reduced_rate_eligible
           ? state.store.reduced_tax_rate
-          : state.store.standard_tax_rate,
+          : menuItem.tax_rate,
       prep_station: menuItem.prep_station,
       status: 'pending',
       note: line.note?.trim() || null,
@@ -867,10 +875,11 @@ export function saveCategory(input: {
 
   state.categories.push({
     id: id('cat'),
-    store_id: state.store.id,
+    company_id: state.store.company_id,
     name: input.name,
     description: input.description,
-    sort_order: input.sort_order,
+    staff_display_name: null,
+    display_order: input.sort_order,
     is_active: input.is_active,
     created_at: nowIso(),
   } satisfies Category);
@@ -879,10 +888,8 @@ export function saveCategory(input: {
 export function deleteCategory(categoryId: string): void {
   const state = db();
   state.categories = state.categories.filter((c) => c.id !== categoryId);
-  // 配下の商品は消さず「カテゴリ未設定」に移す（DB の on delete set null と同じ）
-  for (const item of state.menuItems) {
-    if (item.category_id === categoryId) item.category_id = null;
-  }
+  // 配下の商品は消さず、紐付けだけを外す（カテゴリ未設定になる）
+  state.categoryMenus = state.categoryMenus.filter((link) => link.category_id !== categoryId);
 }
 
 export function saveMenuItem(input: {
@@ -900,19 +907,32 @@ export function saveMenuItem(input: {
 }): void {
   const state = db();
   const existing = state.menuItems.find((m) => m.id === input.id);
+  const { category_id, sort_order, ...rest } = input;
+
+  const menuId = existing?.id ?? id('item');
 
   if (existing) {
-    Object.assign(existing, input, { updated_at: nowIso() });
-    return;
+    Object.assign(existing, rest, { display_order: sort_order, updated_at: nowIso() });
+  } else {
+    state.menuItems.push({
+      ...rest,
+      id: menuId,
+      company_id: state.store.company_id,
+      receipt_display_name: rest.name,
+      menu_type: rest.prep_station === 'bar' ? 'drink' : 'food',
+      tax_rate: state.store.standard_tax_rate,
+      is_notice_only: false,
+      display_order: sort_order,
+      created_at: nowIso(),
+      updated_at: nowIso(),
+    } satisfies MenuItem);
   }
 
-  state.menuItems.push({
-    ...input,
-    id: id('item'),
-    store_id: state.store.id,
-    created_at: nowIso(),
-    updated_at: nowIso(),
-  } satisfies MenuItem);
+  // カテゴリとの紐付けを貼り直す（1 メニュー 1 カテゴリとして扱う）
+  state.categoryMenus = state.categoryMenus.filter((link) => link.menu_id !== menuId);
+  if (category_id) {
+    state.categoryMenus.push({ category_id, menu_id: menuId });
+  }
 }
 
 export function toggleSoldOut(itemId: string, soldOut: boolean): void {
