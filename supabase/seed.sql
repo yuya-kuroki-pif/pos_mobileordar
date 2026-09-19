@@ -75,7 +75,7 @@ begin
   insert into public.shops (
     company_id, slug, name, standard_tax_rate, reduced_tax_rate, tax_included,
     service_charge_rate, staff_pin_hash, opening_note,
-    invoice_registration_number, cash_float_default, open_time, close_time, display_order
+    invoice_registration_number, cash_float_default, open_time_min, close_time_min, display_order
   )
   values (
     v_company_id, 'demo', '炭火焼き デモ店',
@@ -87,9 +87,14 @@ begin
     'ご来店ありがとうございます。ラストオーダーは 23:00 です。',
     'T1234567890123',
     30000,
-    '17:00', '23:30', 10
+    17 * 60, 23 * 60 + 30, 10
   )
   returning id into v_shop_id;
+
+  -- 営業時間帯（分析の絞り込みに使う）
+  insert into public.business_hours (shop_id, name, start_min, end_min, display_order) values
+    (v_shop_id, 'ディナー',   17 * 60,      21 * 60,      10),
+    (v_shop_id, '深夜',       21 * 60,      23 * 60 + 30, 20);
 
   -- -------------------------------------------------------------------------
   -- 卓

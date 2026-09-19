@@ -1,6 +1,7 @@
 import 'server-only';
 
 import * as demo from './demo';
+import { toShop } from './shopRow';
 import { isDemoMode, supabaseAdmin } from './supabase';
 import type {
   Account,
@@ -53,8 +54,9 @@ export async function getShops(corporationId: string): Promise<Shop[]> {
 
   if (error) throw new Error(error.message);
 
-  type Joined = Shop & { companies?: unknown };
-  return ((data ?? []) as Joined[]).map(({ companies: _companies, ...shop }) => shop);
+  return ((data ?? []) as Record<string, unknown>[]).map(({ companies: _companies, ...row }) =>
+    toShop(row),
+  );
 }
 
 export async function getAccounts(corporationId: string): Promise<Account[]> {

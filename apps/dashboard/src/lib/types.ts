@@ -21,6 +21,15 @@ export interface Company {
   display_order: number;
 }
 
+/** 会計ボタンを押した後にお客様へ出す案内（仕様書 §5.12） */
+export type CheckoutGuide = 'wait_at_table' | 'call_staff' | 'come_to_register';
+
+/** 釣銭準備金を入力するタイミング（仕様書 §5.12） */
+export type ChangeFundTiming = 'with_closing' | 'separate';
+
+/** 店舗の操作用パスワード。設定のみで読み出しはしない */
+export type ShopPasswordKind = 'drawer_open' | 'void' | 'table_clear';
+
 export interface Shop {
   id: string;
   company_id: string;
@@ -28,8 +37,9 @@ export interface Shop {
   name: string;
   name_en: string | null;
   icon_url: string | null;
-  open_time: string | null;
-  close_time: string | null;
+  /** 0:00 からの分。1440 以上は翌日（1860 なら 31:00 ＝ 翌 7:00） */
+  open_time_min: number | null;
+  close_time_min: number | null;
   display_order: number;
   standard_tax_rate: number;
   reduced_tax_rate: number;
@@ -38,6 +48,73 @@ export interface Shop {
   invoice_registration_number: string | null;
   business_day_cutoff_hour: number;
   timezone: string;
+
+  // --- 店舗タブ（§5.12） ---
+  last_order_label: string | null;
+  checkout_note: string | null;
+  order_limit_enabled: boolean;
+  order_limit_per_person: number | null;
+  sold_out_daily_reset: boolean;
+  note_input_enabled: boolean;
+  staff_call_enabled: boolean;
+  auto_checkout_slip: boolean;
+  show_tax_excluded_price: boolean;
+  checkout_guide: CheckoutGuide;
+  entry_alert_enabled: boolean;
+  entry_alert_min: number | null;
+  last_order_alert_enabled: boolean;
+  last_order_alert_min: number | null;
+  tip_enabled: boolean;
+  ai_handy: boolean;
+  ai_chat_diagnosis: boolean;
+  ai_menu_book_diagnosis: boolean;
+  ai_mo_optimize: boolean;
+  ai_daily_report: boolean;
+  ai_sales_forecast: boolean;
+  ai_slip_instruction: boolean;
+
+  // --- レジ設定タブ（§5.12） ---
+  receipt_address: string | null;
+  contact_info: string | null;
+  stamp_tax_office: string | null;
+  select_staff_on_checkout: boolean;
+  change_fund_timing: ChangeFundTiming;
+  default_inflow_free: boolean;
+  show_zero_price_items: boolean;
+  auto_round_discount: boolean;
+  open_drawer_on_cashless: boolean;
+  /** 設定済みかどうかだけを画面に渡す。ハッシュそのものは送らない */
+  has_drawer_open_password: boolean;
+  has_void_password: boolean;
+  has_table_clear_password: boolean;
+  use_stera: boolean;
+  receipt_auto_print: boolean;
+  temp_receipt_enabled: boolean;
+  closing_by_time_slot: boolean;
+  closing_by_location: boolean;
+  closing_by_area: boolean;
+  closing_by_menu_type: boolean;
+  closing_by_inflow: boolean;
+  closing_tax_included: boolean;
+  time_charge_rate: number;
+  time_charge_start_min: number | null;
+  time_charge_end_min: number | null;
+
+  // --- Google マップ設定タブ（§5.12） ---
+  google_place_id: string | null;
+  gmap_review_from_survey: boolean;
+  gmap_review_promote_mo: boolean;
+  gmap_review_min_minutes: number | null;
+}
+
+/** 営業時間帯（仕様書 §5.12）。分析画面の絞り込みに使う */
+export interface BusinessHour {
+  id: string;
+  shop_id: string;
+  name: string;
+  start_min: number;
+  end_min: number;
+  display_order: number;
 }
 
 export interface Account {

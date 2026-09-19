@@ -13,5 +13,5 @@ export default async function ShopListPage() {
   const companyName =
     session.companies.find((c) => c.id === session.currentCompanyId)?.name ?? '業態';
 
-  return <ShopListView shops={shops} companyName={companyName} />;
+  return <ShopListView shops={shops} companyName={companyName} permissions={session.permissions} />;
 }

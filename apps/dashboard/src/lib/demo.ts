@@ -5,6 +5,7 @@ import { buildPlanGroups, buildPlans, type PlanState } from './demoPlan';
 import type {
   Account,
   AccountRole,
+  BusinessHour,
   Category,
   MenuTranslation,
   PlanGroup,
@@ -38,6 +39,7 @@ export interface DemoState extends PlanState {
   roles: RoleDefinition[];
   accountRoles: AccountRole[];
   shopGroups: ShopGroup[];
+  businessHours: BusinessHour[];
 
   // --- メニューマスター（業態単位） ---
   categories: Category[];
@@ -59,8 +61,9 @@ function shop(
   name: string,
   slug: string,
   order: number,
-  open: string,
-  close: string
+  /** 0:00 からの分。閉店は 1440 を超えてよい */
+  openMin: number,
+  closeMin: number
 ): Shop {
   return {
     id,
@@ -69,8 +72,8 @@ function shop(
     name,
     name_en: null,
     icon_url: null,
-    open_time: open,
-    close_time: close,
+    open_time_min: openMin,
+    close_time_min: closeMin,
     display_order: order,
     standard_tax_rate: 0.1,
     reduced_tax_rate: 0.08,
@@ -79,6 +82,62 @@ function shop(
     invoice_registration_number: 'T1234567890123',
     business_day_cutoff_hour: 5,
     timezone: 'Asia/Tokyo',
+
+    // --- 店舗タブ（§5.12） ---
+    last_order_label: 'ラストオーダー',
+    checkout_note: null,
+    order_limit_enabled: false,
+    order_limit_per_person: null,
+    sold_out_daily_reset: true,
+    note_input_enabled: true,
+    staff_call_enabled: true,
+    auto_checkout_slip: false,
+    show_tax_excluded_price: false,
+    checkout_guide: 'wait_at_table',
+    entry_alert_enabled: false,
+    entry_alert_min: null,
+    last_order_alert_enabled: false,
+    last_order_alert_min: null,
+    tip_enabled: false,
+    ai_handy: false,
+    ai_chat_diagnosis: false,
+    ai_menu_book_diagnosis: false,
+    ai_mo_optimize: false,
+    ai_daily_report: false,
+    ai_sales_forecast: false,
+    ai_slip_instruction: false,
+
+    // --- レジ設定タブ（§5.12） ---
+    receipt_address: '東京都墨田区江東橋 0-0-0',
+    contact_info: '03-0000-0000',
+    stamp_tax_office: null,
+    select_staff_on_checkout: false,
+    change_fund_timing: 'with_closing',
+    default_inflow_free: false,
+    show_zero_price_items: true,
+    auto_round_discount: false,
+    open_drawer_on_cashless: false,
+    has_drawer_open_password: false,
+    has_void_password: false,
+    has_table_clear_password: false,
+    use_stera: false,
+    receipt_auto_print: true,
+    temp_receipt_enabled: false,
+    closing_by_time_slot: true,
+    closing_by_location: true,
+    closing_by_area: false,
+    closing_by_menu_type: false,
+    closing_by_inflow: false,
+    closing_tax_included: true,
+    time_charge_rate: 0,
+    time_charge_start_min: null,
+    time_charge_end_min: null,
+
+    // --- Google マップ設定タブ（§5.12） ---
+    google_place_id: null,
+    gmap_review_from_survey: false,
+    gmap_review_promote_mo: false,
+    gmap_review_min_minutes: null,
   };
 }
 
@@ -152,9 +211,9 @@ function createState(): DemoState {
   ];
 
   const shops: Shop[] = [
-    shop('shop-1', 'company-1', '炭火焼き デモ店（錦糸町）', 'demo', 10, '17:00', '23:30'),
-    shop('shop-2', 'company-1', '炭火焼き デモ店（平井）', 'demo-hirai', 20, '17:00', '23:00'),
-    shop('shop-3', 'company-2', '海鮮スタンド デモ店', 'demo-kaisen', 10, '11:30', '22:00'),
+    shop('shop-1', 'company-1', '炭火焼き デモ店（錦糸町）', 'demo', 10, 17 * 60, 23 * 60 + 30),
+    shop('shop-2', 'company-1', '炭火焼き デモ店（平井）', 'demo-hirai', 20, 17 * 60, 23 * 60),
+    shop('shop-3', 'company-2', '海鮮スタンド デモ店', 'demo-kaisen', 10, 11 * 60 + 30, 22 * 60),
   ];
 
   const accounts: Account[] = [
@@ -212,6 +271,24 @@ function createState(): DemoState {
       },
     ],
     ...master,
+    businessHours: shops.flatMap((s) => [
+      {
+        id: `${s.id}-bh-1`,
+        shop_id: s.id,
+        name: 'ディナー',
+        start_min: 17 * 60,
+        end_min: 21 * 60,
+        display_order: 10,
+      },
+      {
+        id: `${s.id}-bh-2`,
+        shop_id: s.id,
+        name: '深夜',
+        start_min: 21 * 60,
+        end_min: 23 * 60 + 30,
+        display_order: 20,
+      },
+    ]),
     planGroups: buildPlanGroups(),
     ...buildPlans(shops),
     // 既定では全店舗が全品を扱う
@@ -237,7 +314,7 @@ function createState(): DemoState {
 // HMR でモジュールが作り直されてもデータが消えないよう globalThis に置く。
 // ただし DemoState の形を変えたときは作り直したいので、版を添えて持つ。
 // （版を上げ忘れると、古い形のまま参照して実行時エラーになる）
-const STATE_VERSION = 4;
+const STATE_VERSION = 5;
 
 const g = globalThis as typeof globalThis & {
   __dashboardDemo?: { version: number; state: DemoState };
