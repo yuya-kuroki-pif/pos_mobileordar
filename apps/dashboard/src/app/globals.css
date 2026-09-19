@@ -1,0 +1,17 @@
+/* Ant Design のトークンで足りない最小限だけをここに置く（規約 §14） */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+/* 金額・数値の桁を揃える */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 仕様書 §12: PC 主体。最小幅 1200px を下回っても崩れないよう横スクロールを許す */
+.app-content {
+  min-width: 0;
+}

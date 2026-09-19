@@ -305,7 +305,7 @@ export async function saveStoreSettings(formData: FormData): Promise<ActionResul
     if (isDemoMode()) {
       demo.saveStoreSettings(payload);
     } else {
-      const { error } = await supabaseAdmin().from('stores').update(payload).eq('id', storeId);
+      const { error } = await supabaseAdmin().from('shops').update(payload).eq('id', storeId);
       if (error) throw error;
     }
 

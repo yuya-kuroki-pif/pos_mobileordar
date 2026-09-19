@@ -6,11 +6,15 @@
 -- 何度流しても同じ結果になるよう、先にデモ店舗を消してから入れ直す。
 -- ===========================================================================
 
-delete from public.stores where slug = 'demo';
+delete from public.shops where slug = 'demo';
+delete from public.corporations where name = 'デモ法人';
 
 do $$
 declare
-  v_store_id uuid;
+  v_corp_id    uuid;
+  v_company_id uuid;
+  v_account_id uuid;
+  v_store_id   uuid;
   v_cat_kushi   uuid;
   v_cat_robata  uuid;
   v_cat_ippin   uuid;
@@ -22,14 +26,32 @@ declare
   v_item        uuid;
 begin
   -- -------------------------------------------------------------------------
-  -- 店舗
+  -- 法人 → 業態 → 店舗
   -- -------------------------------------------------------------------------
-  insert into public.stores (
+  insert into public.corporations (name) values ('デモ法人') returning id into v_corp_id;
+  perform public.seed_default_roles(v_corp_id);
+
+  insert into public.companies (corporation_id, name, display_order)
+  values (v_corp_id, '炭火焼き デモ業態', 10) returning id into v_company_id;
+
+  -- 本部アカウント（ダッシュボードのログインに使う）
+  insert into public.accounts (corporation_id, email, name, status)
+  values (v_corp_id, 'owner@example.com', 'デモ管理者', 'invited')
+  returning id into v_account_id;
+  perform public.set_account_password(v_account_id, 'demo1234');
+  insert into public.account_roles (account_id, product, role_id, scope_type)
+  select v_account_id, 'pos', r.id, 'corporation'
+  from public.roles_definitions r
+  where r.corporation_id = v_corp_id and r.name = '法人管理者';
+
+  insert into public.shops (
+    company_id,
     slug, name, standard_tax_rate, reduced_tax_rate, tax_included,
     service_charge_rate, staff_pin_hash, opening_note,
     invoice_registration_number, cash_float_default
   )
   values (
+    v_company_id,
     'demo',
     '炭火焼き デモ店',
     0.1000,   -- 標準税率（店内飲食）

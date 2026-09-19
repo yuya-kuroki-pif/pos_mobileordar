@@ -39,14 +39,14 @@ import type {
 export async function getStoreBySlug(slug: string): Promise<Store | null> {
   if (isDemoMode()) return demo.getStoreBySlug(slug);
 
-  const { data } = await supabaseAdmin().from('stores').select('*').eq('slug', slug).maybeSingle();
+  const { data } = await supabaseAdmin().from('shops').select('*').eq('slug', slug).maybeSingle();
   return (data as Store) ?? null;
 }
 
 export async function getStoreById(storeId: string): Promise<Store | null> {
   if (isDemoMode()) return demo.getStoreById(storeId);
 
-  const { data } = await supabaseAdmin().from('stores').select('*').eq('id', storeId).maybeSingle();
+  const { data } = await supabaseAdmin().from('shops').select('*').eq('id', storeId).maybeSingle();
   return (data as Store) ?? null;
 }
 
