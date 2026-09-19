@@ -2,6 +2,7 @@ import 'server-only';
 
 import { buildMenuMaster } from './demoMenu';
 import { buildPlanGroups, buildPlans, type PlanState } from './demoPlan';
+import { buildTransactions, type TransactionState } from './demoTransactions';
 import type {
   Account,
   Area,
@@ -29,6 +30,7 @@ import type {
   DishUpSlipGroup,
   InflowSource,
   KitchenPrinter,
+  LineReportingBotConfig,
   Menu,
   MenuRow,
   MenuTranslation,
@@ -51,7 +53,7 @@ import type {
 
 const CORP_ID = 'corp-demo';
 
-export interface DemoState extends PlanState {
+export interface DemoState extends PlanState, TransactionState {
   corporation: Corporation;
   companies: Company[];
   shops: Shop[];
@@ -81,6 +83,9 @@ export interface DemoState extends PlanState {
   discountTypes: DiscountType[];
   inflowSources: InflowSource[];
   terminalPaymentMethods: TerminalPaymentMethod[];
+
+  // --- P2: 取引・本部機能（§5.22〜§5.28） ---
+  lineReportingBotConfigs: LineReportingBotConfig[];
 
   // --- P1 の残り（§5.7 / §5.9 / §5.11 / §5.14〜§5.19） ---
   recommendationSets: RecommendationSet[];
@@ -300,6 +305,42 @@ function createState(): DemoState {
 
   const master = buildMenuMaster();
 
+  const paymentSettings = buildPaymentSettings(companies.map((c) => c.id));
+  const p1Rest = buildP1Rest(
+    shops.map((s) => ({ id: s.id, company_id: s.company_id })),
+    companies.map((c) => c.id)
+  );
+
+  // 取引データ。履歴画面と分析画面の見た目を確かめるために 30 日ぶん作る
+  const transactions = buildTransactions({
+    shops: shops.map((s) => ({ id: s.id, company_id: s.company_id })),
+    menus: master.menus,
+    tableIdsByShop: Object.fromEntries(
+      shops.map((s) => [
+        s.id,
+        p1Rest.restaurantTables.filter((t) => t.store_id === s.id).map((t) => t.id),
+      ])
+    ),
+    clerkIdsByShop: Object.fromEntries(
+      shops.map((s) => [s.id, p1Rest.clerks.filter((c) => c.shop_id === s.id).map((c) => c.id)])
+    ),
+    paymentMethodsByCompany: Object.fromEntries(
+      companies.map((c) => [
+        c.id,
+        paymentSettings.paymentMethods
+          .filter((m) => m.company_id === c.id)
+          .map((m) => ({ id: m.id, name: m.name, kind: m.kind })),
+      ])
+    ),
+    inflowSourceIdsByCompany: Object.fromEntries(
+      companies.map((c) => [
+        c.id,
+        paymentSettings.inflowSources.filter((i) => i.company_id === c.id).map((i) => i.id),
+      ])
+    ),
+    days: 30,
+  });
+
   return {
     corporation: { id: CORP_ID, name: 'デモ法人' },
     companies,
@@ -337,11 +378,10 @@ function createState(): DemoState {
     ]),
     planGroups: buildPlanGroups(),
     ...buildPlans(shops),
-    ...buildPaymentSettings(companies.map((c) => c.id)),
-    ...buildP1Rest(
-      shops.map((s) => ({ id: s.id, company_id: s.company_id })),
-      companies.map((c) => c.id)
-    ),
+    ...paymentSettings,
+    ...p1Rest,
+    ...transactions,
+    lineReportingBotConfigs: [],
     // 既定では全店舗が全品を扱う
     shopMenus: shops.flatMap((shop) =>
       master.menus
@@ -393,7 +433,7 @@ function createState(): DemoState {
 // HMR でモジュールが作り直されてもデータが消えないよう globalThis に置く。
 // ただし DemoState の形を変えたときは作り直したいので、版を添えて持つ。
 // （版を上げ忘れると、古い形のまま参照して実行時エラーになる）
-const STATE_VERSION = 8;
+const STATE_VERSION = 10;
 
 const g = globalThis as typeof globalThis & {
   __dashboardDemo?: { version: number; state: DemoState };

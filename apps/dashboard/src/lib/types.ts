@@ -657,3 +657,194 @@ export interface RestaurantTable {
   sort_order: number;
   is_active: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// P2: 取引・本部機能（仕様書 §5.22〜§5.28 / §8.5）
+// ---------------------------------------------------------------------------
+
+export type SessionStatus = 'open' | 'closed' | 'cleared';
+
+export interface TableSession {
+  id: string;
+  store_id: string;
+  table_id: string | null;
+  parent_session_id: string | null;
+  guest_count: number;
+  status: SessionStatus;
+  opened_at: string;
+  closed_at: string | null;
+  clear_reason: string | null;
+  inflow_source_id: string | null;
+}
+
+export interface OrderRecord {
+  id: string;
+  store_id: string;
+  session_id: string;
+  order_number: number;
+  channel: string;
+  placed_at: string;
+}
+
+export interface OrderItemRecord {
+  id: string;
+  order_id: string;
+  session_id: string;
+  menu_id: string | null;
+  name_snapshot: string;
+  unit_price: number;
+  quantity: number;
+  tax_rate: number;
+  line_total: number;
+  status: string;
+}
+
+/** 会計。Phase A の payments をそのまま使う */
+export interface PaymentRecord {
+  id: string;
+  store_id: string;
+  session_id: string;
+  method: string;
+  payment_method_id: string | null;
+  receipt_number: number | null;
+  clerk_id: string | null;
+  guest_count: number | null;
+  inflow_source_id: string | null;
+  subtotal: number;
+  discount: number;
+  service_charge: number;
+  tax: number;
+  total: number;
+  status: 'paid' | 'refunded';
+  paid_at: string;
+  voided_at: string | null;
+  void_reason: string | null;
+  modified_at: string | null;
+}
+
+export interface AccountingDiscount {
+  id: string;
+  payment_id: string;
+  discount_type_id: string | null;
+  amount: number;
+}
+
+export type AuditEvent =
+  | 'drawer_open'
+  | 'discount'
+  | 'void'
+  | 'table_clear'
+  | 'accounting_modify'
+  | 'cash_in'
+  | 'cash_out'
+  | 'price_override';
+
+export const AUDIT_EVENT_LABELS: Record<AuditEvent, string> = {
+  drawer_open: 'ドロワーオープン',
+  discount: '値引き・割引',
+  void: 'VOID',
+  table_clear: 'テーブルクリア',
+  accounting_modify: '会計修正',
+  cash_in: '入金',
+  cash_out: '出金',
+  price_override: '価格変更',
+};
+
+export interface AuditLog {
+  id: string;
+  shop_id: string;
+  event_type: AuditEvent;
+  occurred_at: string;
+  table_id: string | null;
+  clerk_id: string | null;
+  amount: number | null;
+  receipt_number: number | null;
+  note: string | null;
+}
+
+/** 日次処理（§5.22） */
+export interface CashClosing {
+  id: string;
+  store_id: string;
+  business_day: string;
+  closing_index: number;
+  closed_at: string;
+  total_sales: number;
+  guest_count: number;
+  group_count: number;
+  opening_float: number;
+  cash_sales: number;
+  cash_in: number;
+  cash_out: number;
+  expected_cash: number;
+  counted_cash: number;
+  difference: number;
+  bank_deposit: number;
+  carryover_fund: number;
+  denomination_counts: Record<string, number>;
+}
+
+export interface BankDepositCorrection {
+  id: string;
+  closing_id: string;
+  corrected_at: string;
+  reason: string | null;
+  before_amount: number;
+  after_amount: number;
+  account_id: string | null;
+}
+
+/** 金種（§5.22 の現金在高） */
+export const DENOMINATIONS = [10000, 5000, 2000, 1000, 500, 100, 50, 10, 5, 1] as const;
+
+/** キャッシュレス決済（§5.24） */
+export interface TerminalPayment {
+  id: string;
+  shop_id: string;
+  transaction_id: string;
+  kind: string | null;
+  method: string | null;
+  status: string;
+  occurred_at: string;
+  amount: number;
+  fee: number;
+  fee_rate: number;
+  net: number;
+  brand: string | null;
+  issuer_country: string | null;
+  masked_pan: string | null;
+  cycle_start: string | null;
+  cycle_end: string | null;
+  refund_requested_at: string | null;
+}
+
+export interface TerminalDeposit {
+  id: string;
+  corporation_id: string;
+  requested_at: string | null;
+  executed_at: string | null;
+  bank_account: string | null;
+  cycle_start: string | null;
+  cycle_end: string | null;
+  amount: number;
+  sales: number;
+  fee: number;
+  tax: number;
+  adjustment: number;
+  carryover: number;
+  cycle_type: string | null;
+  status: string;
+  statement_no: string | null;
+}
+
+/** レポートくん設定（§5.27） */
+export interface LineReportingBotConfig {
+  id: string;
+  corporation_id: string;
+  group_name: string;
+  line_group_id: string | null;
+  shop_ids: string[];
+  send_time_min: number;
+  items: Record<string, boolean>;
+  is_active: boolean;
+}
