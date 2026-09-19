@@ -11,7 +11,9 @@ import type {
   Choice,
   Company,
   Corporation,
+  DiscountType,
   DishUpSlipGroup,
+  InflowSource,
   KitchenPrinter,
   Menu,
   MenuRow,
@@ -19,11 +21,13 @@ import type {
   MenuTypeValue,
   OptionDef,
   OptionRow,
+  PaymentMethod,
   PlanGroup,
   RoleDefinition,
   Shop,
   ShopGroup,
   ShopMenu,
+  TerminalPaymentMethod,
 } from './types';
 
 /**
@@ -57,6 +61,12 @@ export interface DemoState extends PlanState {
 
   // --- プラン（飲み放題・コース） ---
   planGroups: PlanGroup[];
+
+  // --- 支払方法等設定（§5.10） ---
+  paymentMethods: PaymentMethod[];
+  discountTypes: DiscountType[];
+  inflowSources: InflowSource[];
+  terminalPaymentMethods: TerminalPaymentMethod[];
 }
 
 function shop(
@@ -295,6 +305,7 @@ function createState(): DemoState {
     ]),
     planGroups: buildPlanGroups(),
     ...buildPlans(shops),
+    ...buildPaymentSettings(companies.map((c) => c.id)),
     // 既定では全店舗が全品を扱う
     shopMenus: shops.flatMap((shop) =>
       master.menus
@@ -330,7 +341,7 @@ function createState(): DemoState {
 // HMR でモジュールが作り直されてもデータが消えないよう globalThis に置く。
 // ただし DemoState の形を変えたときは作り直したいので、版を添えて持つ。
 // （版を上げ忘れると、古い形のまま参照して実行時エラーになる）
-const STATE_VERSION = 6;
+const STATE_VERSION = 7;
 
 const g = globalThis as typeof globalThis & {
   __dashboardDemo?: { version: number; state: DemoState };
@@ -435,3 +446,41 @@ export function setAccountStatus(accountId: string, status: Account['status']): 
   if (account) account.status = status;
 }
 
+
+/**
+ * 支払方法等設定の既定値（仕様書 §5.10）。
+ * マイグレーションの seed_default_payment_settings() と同じ中身。
+ */
+function buildPaymentSettings(companyIds: string[]) {
+  const methods: PaymentMethod[] = [];
+  const discountTypes: DiscountType[] = [];
+  const inflowSources: InflowSource[] = [];
+
+  for (const companyId of companyIds) {
+    methods.push(
+      { id: `${companyId}-pm-1`, company_id: companyId, name: '現金', kind: 'cash', is_system: true, display_order: 10 },
+      { id: `${companyId}-pm-2`, company_id: companyId, name: 'オンライン決済', kind: 'mobile', is_system: true, display_order: 20 },
+      { id: `${companyId}-pm-3`, company_id: companyId, name: 'クレジットカード', kind: 'credit', is_system: false, display_order: 30 },
+      { id: `${companyId}-pm-4`, company_id: companyId, name: 'QR決済', kind: 'qr', is_system: false, display_order: 40 },
+      { id: `${companyId}-pm-5`, company_id: companyId, name: '電子マネー', kind: 'e_money', is_system: false, display_order: 50 }
+    );
+
+    discountTypes.push({
+      id: `${companyId}-dt-1`,
+      company_id: companyId,
+      name: '端数値引',
+      is_system: true,
+      display_order: 10,
+    });
+
+    inflowSources.push(
+      { id: `${companyId}-is-1`, company_id: companyId, name: 'フリー', is_system: true, display_order: 10 },
+      { id: `${companyId}-is-2`, company_id: companyId, name: 'ホットペッパー', is_system: false, display_order: 20 },
+      { id: `${companyId}-is-3`, company_id: companyId, name: '食べログ', is_system: false, display_order: 30 },
+      { id: `${companyId}-is-4`, company_id: companyId, name: '公式HP', is_system: false, display_order: 40 },
+      { id: `${companyId}-is-5`, company_id: companyId, name: 'ぐるなび', is_system: false, display_order: 50 }
+    );
+  }
+
+  return { paymentMethods: methods, discountTypes, inflowSources, terminalPaymentMethods: [] };
+}

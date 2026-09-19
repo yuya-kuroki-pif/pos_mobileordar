@@ -92,7 +92,7 @@ export const POS_MENU: MenuGroup[] = [
     label: '業態管理',
     children: [
       { key: 'company-list', label: '業態一覧', href: '/company', feature: 'company_management', pending: true },
-      { key: 'payment-types', label: '支払方法等設定', href: '/paymentTypes', feature: 'payment_settings', pending: true },
+      { key: 'payment-types', label: '支払方法等設定', href: '/paymentTypes', feature: 'payment_settings' },
       { key: 'mo-design', label: 'モバイルオーダーデザイン', href: '/mobileOrderDesign/theme', feature: 'company_management', pending: true },
     ],
   },

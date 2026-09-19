@@ -441,3 +441,71 @@ export interface PlanDetail {
   dealers: (ShopPlan & { shop_name: string })[];
   translations: PlanTranslation[];
 }
+
+// ---------------------------------------------------------------------------
+// 支払方法等設定（仕様書 §5.10）。いずれも業態単位のマスター
+// ---------------------------------------------------------------------------
+
+export type PaymentKind =
+  | 'cash'
+  | 'mobile'
+  | 'credit'
+  | 'point'
+  | 'qr'
+  | 'e_money'
+  | 'credit_sale'
+  | 'gift_certificate';
+
+export const PAYMENT_KINDS: { value: PaymentKind; label: string }[] = [
+  { value: 'cash', label: '現金' },
+  { value: 'mobile', label: 'モバイル決済' },
+  { value: 'credit', label: 'クレジット' },
+  { value: 'point', label: 'ポイント' },
+  { value: 'qr', label: 'QR決済' },
+  { value: 'e_money', label: '電子マネー' },
+  { value: 'credit_sale', label: '掛売' },
+  { value: 'gift_certificate', label: '商品券' },
+];
+
+export interface PaymentMethod {
+  id: string;
+  company_id: string;
+  name: string;
+  kind: PaymentKind;
+  /** 「現金」「オンライン決済」はシステム既定で削除できない */
+  is_system: boolean;
+  display_order: number;
+}
+
+export interface DiscountType {
+  id: string;
+  company_id: string;
+  name: string;
+  is_system: boolean;
+  display_order: number;
+}
+
+export interface InflowSource {
+  id: string;
+  company_id: string;
+  name: string;
+  is_system: boolean;
+  display_order: number;
+}
+
+/** 決済端末が返すブランド名と、支払方法の対応づけ */
+export interface TerminalPaymentMethod {
+  id: string;
+  company_id: string;
+  brand: string;
+  payment_method_id: string | null;
+  display_order: number;
+}
+
+/** 支払方法等設定の 4 タブぶん */
+export interface PaymentSettings {
+  methods: PaymentMethod[];
+  discountTypes: DiscountType[];
+  inflowSources: InflowSource[];
+  terminals: TerminalPaymentMethod[];
+}
