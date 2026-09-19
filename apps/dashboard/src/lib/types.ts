@@ -992,6 +992,7 @@ export interface Customer {
   id: string;
   corporation_id: string;
   line_user_id: string | null;
+  zalo_user_id: string | null;
   display_name: string | null;
   gender: CustomerGender;
   birth_date: string | null;
@@ -1001,12 +1002,25 @@ export interface Customer {
   rank_name: string | null;
 }
 
-export interface LineOfficialAccount {
+/** 配信チャネル。日本は LINE、ベトナムは Zalo が主流 */
+export type MessagingChannel = 'line' | 'zalo';
+
+export const CHANNEL_LABELS: Record<MessagingChannel, string> = {
+  line: 'LINE',
+  zalo: 'Zalo',
+};
+
+/** LINE 公式アカウント / Zalo OA をまとめて扱う */
+export interface MessagingAccount {
   id: string;
   company_id: string;
+  channel: MessagingChannel;
   name: string;
+  /** LINE ならチャネル ID、Zalo なら OA ID */
   channel_id: string | null;
   monthly_quota: number;
+  /** Zalo の ZNS（通知メッセージ）の月間上限 */
+  zns_quota: number;
   friends_total: number;
   friends_active: number;
   blocked: number;
@@ -1040,7 +1054,10 @@ export interface CouponPreset {
 export interface MessageDelivery {
   id: string;
   company_id: string;
-  line_account_id: string | null;
+  channel: MessagingChannel;
+  messaging_account_id: string | null;
+  /** Zalo の ZNS はテンプレート登録が要る */
+  zns_template_id: string | null;
   name: string;
   status: DeliveryStatus;
   target_type: DeliveryTarget;

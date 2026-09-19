@@ -1,5 +1,5 @@
 import { requireSession } from '@/lib/auth';
-import { getLineAccounts, getMessageDeliveries } from '@/lib/crmQueries';
+import { getMessagingAccounts, getMessageDeliveries } from '@/lib/crmQueries';
 
 import { MessageDeliveryView } from './MessageDeliveryView';
 
@@ -12,7 +12,7 @@ export default async function MessageDeliveryPage() {
 
   const [deliveries, accounts] = await Promise.all([
     getMessageDeliveries(session.currentCompanyId),
-    getLineAccounts(session.currentCompanyId),
+    getMessagingAccounts(session.currentCompanyId),
   ]);
 
   const companyName =

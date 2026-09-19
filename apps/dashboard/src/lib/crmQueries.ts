@@ -6,7 +6,7 @@ import type {
   Coupon,
   CouponPreset,
   EmployeeReview,
-  LineOfficialAccount,
+  MessagingAccount,
   MembershipRank,
   MenuReview,
   MessageDelivery,
@@ -45,9 +45,10 @@ export const getCouponPresets = (companyId: string) =>
     db().couponPresets.filter((c) => c.company_id === companyId)
   );
 
-export const getLineAccounts = (companyId: string) =>
-  readByCompany<LineOfficialAccount>('line_official_accounts', companyId, () =>
-    db().lineAccounts.filter((a) => a.company_id === companyId)
+/** LINE / Zalo の配信アカウント（§5.31 と Zalo 対応） */
+export const getMessagingAccounts = (companyId: string) =>
+  readByCompany<MessagingAccount>('messaging_accounts', companyId, () =>
+    db().messagingAccounts.filter((a) => a.company_id === companyId)
   );
 
 export const getMessageDeliveries = (companyId: string) =>

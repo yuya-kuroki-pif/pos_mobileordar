@@ -4,7 +4,7 @@ import { DataTable, TableNote, type DataRow } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
 import { getShopSummaries, monthRange } from '@/lib/analyticsQueries';
 import { requireSession } from '@/lib/auth';
-import { getQuestionnaireAnswers } from '@/lib/crmQueries';
+import { getMessagingAccounts, getQuestionnaireAnswers } from '@/lib/crmQueries';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: '集客ダッシュボード' };
@@ -27,10 +27,15 @@ export default async function AttractDashboardPage({
   const shops = session.shops.filter((s) => s.company_id === session.currentCompanyId);
   const shopIds = shops.map((s) => s.id);
 
-  const [summaries, answers] = await Promise.all([
+  const [summaries, answers, accounts] = await Promise.all([
     getShopSummaries(shopIds, monthRange(yearMonth)),
     getQuestionnaireAnswers(shopIds, `${yearMonth}-01`, `${yearMonth}-31`),
+    getMessagingAccounts(session.currentCompanyId),
   ]);
+
+  // 友だち・フォロワーはチャネルごとに数える
+  const followers = (channel: 'line' | 'zalo') =>
+    accounts.filter((a) => a.channel === channel).reduce((sum, a) => sum + a.friends_total, 0);
 
   const shopName = new Map(shops.map((s) => [s.id, s.name]));
 
@@ -82,7 +87,7 @@ export default async function AttractDashboardPage({
         showIcon
         style={{ marginBottom: 16 }}
         message="Google ビジネスプロフィールとの接続はこれからです"
-        description="経路検索数やクチコミ件数は、連携が済んでから出せるようになります。いまはアンケートの「認知経路」で代わりに見ています。"
+        description="経路検索数やクチコミ件数は、連携が済んでから出せるようになります。いまはアンケートの「認知経路」と、LINE / Zalo の友だち数で代わりに見ています。"
       />
 
       <Row gutter={16} style={{ marginBottom: 16 }}>
@@ -113,6 +118,19 @@ export default async function AttractDashboardPage({
               precision={1}
               suffix="%"
             />
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic title="LINE 友だち数" value={followers('line')} suffix="人" />
+          </Card>
+        </Col>
+        <Col xs={12} md={6}>
+          <Card>
+            <Statistic title="Zalo フォロワー数" value={followers('zalo')} suffix="人" />
           </Card>
         </Col>
       </Row>

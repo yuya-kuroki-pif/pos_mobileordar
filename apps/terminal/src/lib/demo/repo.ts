@@ -120,7 +120,7 @@ export function getFloorMap(): TableWithSession[] {
     });
 }
 
-export function getMenuTree(onlyOrderable: boolean): CategoryWithItems[] {
+export function getMenuTree(onlyOrderable: boolean, locale = 'ja'): CategoryWithItems[] {
   const state = db();
 
   const groupsByItem = new Map<string, OptionGroupWithOptions[]>();
@@ -143,7 +143,7 @@ export function getMenuTree(onlyOrderable: boolean): CategoryWithItems[] {
     .map((item) => ({ ...clone(item), option_groups: groupsByItem.get(item.id) ?? [] }));
 
   // カテゴリとメニューは多対多（category_menus）
-  return state.categories
+  const tree = state.categories
     .filter((category) => category.is_active)
     .sort((a, b) => a.display_order - b.display_order)
     .map((category) => ({
@@ -153,6 +153,95 @@ export function getMenuTree(onlyOrderable: boolean): CategoryWithItems[] {
         .map((link) => items.find((item) => item.id === link.menu_id))
         .filter((item): item is MenuItemWithOptions => Boolean(item)),
     }));
+
+  return locale === 'ja' ? tree : translateTree(tree, locale);
+}
+
+/** デモ用の訳。訳が無いものは日本語のまま残す */
+const DEMO_TRANSLATIONS: Record<string, Record<string, string>> = {
+  vi: {
+    串焼き: 'Xiên nướng',
+    炉端焼き: 'Nướng lò',
+    一品料理: 'Món lẻ',
+    ドリンク: 'Đồ uống',
+    デザート: 'Tráng miệng',
+    もも串: 'Xiên đùi gà',
+    ねぎま: 'Xiên gà hành',
+    'つくね（卵黄付き）': 'Chả gà viên (kèm lòng đỏ)',
+    ハツ: 'Tim gà',
+    ホッケ開き: 'Cá Hokke nướng',
+    ハマグリ酒蒸し: 'Nghêu hấp rượu',
+    ポテトフライ: 'Khoai tây chiên',
+    だし巻き玉子: 'Trứng cuộn dashi',
+    生ビール: 'Bia tươi',
+    ハイボール: 'Highball',
+    烏龍茶: 'Trà ô long',
+    バニラアイス: 'Kem vani',
+    焼き加減: 'Độ chín',
+    サイズ: 'Kích cỡ',
+    トッピング: 'Topping',
+    おまかせ: 'Theo đầu bếp',
+    しっかりめ: 'Chín kỹ',
+    レアめ: 'Tái',
+    レギュラー: 'Thường',
+    メガジョッキ: 'Cốc lớn',
+    温玉: 'Trứng lòng đào',
+    マヨネーズ: 'Sốt mayonnaise',
+    七味: 'Ớt bột shichimi',
+    チーズ: 'Phô mai',
+  },
+  en: {
+    串焼き: 'Grilled skewers',
+    炉端焼き: 'Robatayaki',
+    一品料理: 'A la carte',
+    ドリンク: 'Drinks',
+    デザート: 'Desserts',
+    もも串: 'Chicken thigh skewer',
+    ねぎま: 'Chicken & leek skewer',
+    'つくね（卵黄付き）': 'Chicken meatball with yolk',
+    ハツ: 'Chicken heart',
+    ホッケ開き: 'Grilled atka mackerel',
+    ハマグリ酒蒸し: 'Sake-steamed clams',
+    ポテトフライ: 'French fries',
+    だし巻き玉子: 'Dashi rolled omelette',
+    生ビール: 'Draft beer',
+    ハイボール: 'Highball',
+    烏龍茶: 'Oolong tea',
+    バニラアイス: 'Vanilla ice cream',
+    焼き加減: 'Doneness',
+    サイズ: 'Size',
+    トッピング: 'Toppings',
+    おまかせ: "Chef's choice",
+    しっかりめ: 'Well done',
+    レアめ: 'Rare',
+    レギュラー: 'Regular',
+    メガジョッキ: 'Mega mug',
+    温玉: 'Soft-boiled egg',
+    マヨネーズ: 'Mayonnaise',
+    七味: 'Shichimi pepper',
+    チーズ: 'Cheese',
+  },
+};
+
+function translateTree(tree: CategoryWithItems[], locale: string): CategoryWithItems[] {
+  const dict = DEMO_TRANSLATIONS[locale];
+  if (!dict) return tree;
+
+  const tr = (text: string) => dict[text] ?? text;
+
+  return tree.map((category) => ({
+    ...category,
+    name: tr(category.name),
+    items: category.items.map((item) => ({
+      ...item,
+      name: tr(item.name),
+      option_groups: item.option_groups.map((group) => ({
+        ...group,
+        name: tr(group.name),
+        options: group.options.map((option) => ({ ...option, name: tr(option.name) })),
+      })),
+    })),
+  }));
 }
 
 export function getUncategorizedItems(): MenuItem[] {

@@ -11,6 +11,7 @@ import {
   InputNumber,
   Modal,
   Popconfirm,
+  Segmented,
   Select,
   Space,
   Switch,
@@ -29,10 +30,11 @@ import {
   saveAreaAction,
   saveTableAction,
 } from '@/lib/actions/table';
+import { MO_LOCALES, type MoLocale } from '@/lib/moLocale';
 import type { TableBoard } from '@/lib/tableQueries';
 import type { Area, RestaurantTable, Shop } from '@/lib/types';
 
-type QrMap = Record<string, { url: string; image: string }>;
+type QrMap = Record<string, Record<string, { url: string; image: string }>>;
 
 /**
  * テーブル（仕様書 §5.19）。
@@ -59,6 +61,7 @@ export function TableView({
   const [areaDraft, setAreaDraft] = useState<{ id: string; name: string; order: number } | null>(null);
   const [tableModal, setTableModal] = useState<{ open: boolean; id: string } | null>(null);
   const [qrTable, setQrTable] = useState<RestaurantTable | null>(null);
+  const [qrLocale, setQrLocale] = useState<MoLocale>('ja');
   const [pending, startTransition] = useTransition();
 
   function saveArea() {
@@ -146,11 +149,17 @@ export function TableView({
 
   function downloadQrList() {
     // 卓名と URL の一覧を CSV で落とす。印刷用の台紙は運用側で組む
-    const rows = [['エリア', 'テーブル名', 'MO 起動 URL'].join(',')];
+    const rows = [
+      ['エリア', 'テーブル名', ...MO_LOCALES.map((l) => `MO 起動 URL（${l.label}）`)].join(','),
+    ];
     for (const group of groups) {
       for (const table of group.tables) {
         rows.push(
-          [group.area?.name ?? '未設定', table.name, qrByTable[table.id]?.url ?? ''].join(',')
+          [
+            group.area?.name ?? '未設定',
+            table.name,
+            ...MO_LOCALES.map((l) => qrByTable[table.id]?.[l.value]?.url ?? ''),
+          ].join(',')
         );
       }
     }
@@ -390,17 +399,28 @@ export function TableView({
         footer={null}
         onCancel={() => setQrTable(null)}
       >
-        {qrTable && qrByTable[qrTable.id] && (
+        {qrTable && qrByTable[qrTable.id]?.[qrLocale] && (
           <Space direction="vertical" align="center" style={{ width: '100%' }}>
+            <Segmented
+              value={qrLocale}
+              onChange={(value) => setQrLocale(value as MoLocale)}
+              options={MO_LOCALES.map((l) => ({ value: l.value, label: l.label }))}
+            />
             <Image
-              src={qrByTable[qrTable.id].image}
+              src={qrByTable[qrTable.id][qrLocale].image}
               alt={`${qrTable.name} の QR コード`}
               width={240}
               height={240}
               unoptimized
             />
-            <Typography.Text copyable={{ text: qrByTable[qrTable.id].url }} type="secondary">
-              {qrByTable[qrTable.id].url}
+            <Typography.Text
+              copyable={{ text: qrByTable[qrTable.id][qrLocale].url }}
+              type="secondary"
+            >
+              {qrByTable[qrTable.id][qrLocale].url}
+            </Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              この QR から開くと、最初からその言語で表示されます。お客様は画面上でも切り替えられます。
             </Typography.Text>
           </Space>
         )}

@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import { useRouter } from 'next/navigation';
 
 import { SalesChart } from '@/components/charts/SalesChart';
+import { useT } from '@/components/LocaleProvider';
 import { PageHeader } from '@/components/PageHeader';
 import type { DailySummary, MenuSummary } from '@/lib/types';
 
@@ -37,6 +38,7 @@ export function DashboardView({
   roleName: string | null;
 }) {
   const router = useRouter();
+  const t = useT();
 
   const sales = daily.reduce((sum, d) => sum + d.sales, 0);
   const guests = daily.reduce((sum, d) => sum + d.guest_count, 0);
@@ -72,54 +74,54 @@ export function DashboardView({
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col xs={12} md={6}>
           <Card>
-            <Statistic title="当月売上" value={sales} prefix="¥" />
+            <Statistic title={t('当月売上')} value={sales} prefix="¥" />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card>
-            <Statistic title="客数" value={guests} suffix="人" />
+            <Statistic title={t('客数')} value={guests} suffix="人" />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card>
-            <Statistic title="客単価" value={average} prefix="¥" />
+            <Statistic title={t('客単価')} value={average} prefix="¥" />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card>
-            <Statistic title="1 日あたり売上" value={dailyAverage} prefix="¥" />
+            <Statistic title={t('1 日あたり売上')} value={dailyAverage} prefix="¥" />
           </Card>
         </Col>
       </Row>
 
-      <Card title="日別の売上" style={{ marginBottom: 16 }}>
+      <Card title={t('日別の売上')} style={{ marginBottom: 16 }}>
         <SalesChart data={chart} />
       </Card>
 
       <Row gutter={16}>
         <Col xs={24} lg={12}>
-          <Card title="店舗別" styles={{ body: { padding: 0 } }} style={{ marginBottom: 16 }}>
+          <Card title={t('店舗別')} styles={{ body: { padding: 0 } }} style={{ marginBottom: 16 }}>
             <Table<ShopRow>
               rowKey="shop_id"
               dataSource={byShop}
               size="small"
               pagination={false}
               columns={[
-                { title: '店舗名', dataIndex: 'shop_name' },
+                { title: t('店舗名'), dataIndex: 'shop_name' },
                 {
-                  title: '売上',
+                  title: t('売上'),
                   dataIndex: 'sales',
                   align: 'right',
                   render: (value: number) => <span className="tabular">¥{yen.format(value)}</span>,
                 },
                 {
-                  title: '客数',
+                  title: t('客数'),
                   dataIndex: 'guest_count',
                   align: 'right',
                   render: (value: number) => <span className="tabular">{value}</span>,
                 },
                 {
-                  title: '客単価',
+                  title: t('客単価'),
                   key: 'avg',
                   align: 'right',
                   render: (_, row) => (
@@ -134,7 +136,7 @@ export function DashboardView({
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card title="売れ筋メニュー（上位 10 品）" styles={{ body: { padding: 0 } }}>
+          <Card title={t('売れ筋メニュー（上位 10 品）')} styles={{ body: { padding: 0 } }}>
             <Table<MenuSummary>
               rowKey={(row) => row.menu_id ?? row.name}
               dataSource={topMenus}
@@ -147,21 +149,21 @@ export function DashboardView({
                   width: 50,
                   render: (_, __, index) => <span className="tabular">{index + 1}</span>,
                 },
-                { title: 'メニュー名', dataIndex: 'name' },
+                { title: t('メニュー名'), dataIndex: 'name' },
                 {
-                  title: 'カテゴリ',
+                  title: t('カテゴリ'),
                   dataIndex: 'category_name',
                   render: (value: string | null) =>
                     value ? <Tag>{value}</Tag> : <span style={{ color: '#bfbfbf' }}>—</span>,
                 },
                 {
-                  title: '出数',
+                  title: t('出数'),
                   dataIndex: 'qty',
                   align: 'right',
                   render: (value: number) => <span className="tabular">{value}</span>,
                 },
                 {
-                  title: '売上',
+                  title: t('売上'),
                   dataIndex: 'sales',
                   align: 'right',
                   render: (value: number) => <span className="tabular">¥{yen.format(value)}</span>,

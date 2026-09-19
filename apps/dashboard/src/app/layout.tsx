@@ -3,8 +3,10 @@ import '@ant-design/v5-patch-for-react-19';
 import { AntdRegistry } from '@ant-design/nextjs-registry';
 import { App as AntdApp, ConfigProvider } from 'antd';
 import jaJP from 'antd/locale/ja_JP';
+import viVN from 'antd/locale/vi_VN';
 import type { Metadata, Viewport } from 'next';
 
+import { currentUiLocale } from '@/lib/localeServer';
 import { theme } from '@/styles/theme';
 
 import './globals.css';
@@ -16,12 +18,15 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { width: 'device-width', initialScale: 1 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // 日付ピッカーなど antd 側の文言も一緒に切り替える
+  const locale = await currentUiLocale();
+
   return (
-    <html lang="ja">
+    <html lang={locale}>
       <body>
         <AntdRegistry>
-          <ConfigProvider locale={jaJP} theme={theme}>
+          <ConfigProvider locale={locale === 'vi' ? viVN : jaJP} theme={theme}>
             <AntdApp>{children}</AntdApp>
           </ConfigProvider>
         </AntdRegistry>

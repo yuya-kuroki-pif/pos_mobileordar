@@ -2,6 +2,8 @@
 
 import { Card, Rate, Space, Table, Tag, Typography } from 'antd';
 
+import { useT } from './LocaleProvider';
+
 const yen = new Intl.NumberFormat('ja-JP');
 
 /**
@@ -115,6 +117,8 @@ export function DataTable({
   pageSize?: number;
   style?: React.CSSProperties;
 }) {
+  const t = useT();
+
   const table = (
     <Table<DataRow>
       rowKey="key"
@@ -126,9 +130,9 @@ export function DataTable({
           ? { pageSize, showSizeChanger: false, showTotal: (t) => `${t} 件` }
           : false
       }
-      locale={{ emptyText }}
+      locale={{ emptyText: t(emptyText) }}
       columns={columns.map((column) => ({
-        title: column.title,
+        title: t(column.title),
         dataIndex: column.key,
         width: column.width,
         align: column.align,
@@ -142,7 +146,7 @@ export function DataTable({
   if (!title && !extra) return <div style={style}>{table}</div>;
 
   return (
-    <Card title={title} extra={extra} styles={{ body: { padding: 0 } }} style={style}>
+    <Card title={title ? t(title) : undefined} extra={extra} styles={{ body: { padding: 0 } }} style={style}>
       {table}
     </Card>
   );

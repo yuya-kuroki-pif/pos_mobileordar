@@ -463,7 +463,7 @@ function createState(): DemoState {
 // HMR でモジュールが作り直されてもデータが消えないよう globalThis に置く。
 // ただし DemoState の形を変えたときは作り直したいので、版を添えて持つ。
 // （版を上げ忘れると、古い形のまま参照して実行時エラーになる）
-const STATE_VERSION = 14;
+const STATE_VERSION = 15;
 
 const g = globalThis as typeof globalThis & {
   __dashboardDemo?: { version: number; state: DemoState };

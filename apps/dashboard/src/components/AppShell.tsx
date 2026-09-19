@@ -3,6 +3,7 @@
 import {
   BellOutlined,
   DownOutlined,
+  GlobalOutlined,
   MessageOutlined,
   QuestionCircleOutlined,
   UserOutlined,
@@ -12,11 +13,15 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition } from 'react';
 
+import { setUiLocaleAction } from '@/lib/actions/locale';
 import { logoutAction, switchCompanyAction } from '@/lib/actions/session';
 import { MENU_BY_SECTION, TOP_TABS, type TopSection } from '@/lib/menuTree';
 import { canView, type PermissionMap } from '@/lib/permissions';
 import type { Company } from '@/lib/types';
+import { makeTranslator, UI_LOCALES, type UiLocale } from '@/lib/uiLocale';
 import { HEADER_BG, HEADER_TAB_ACTIVE_BG } from '@/styles/theme';
+
+import { LocaleProvider } from './LocaleProvider';
 
 const { Header, Sider, Content } = Layout;
 
@@ -30,6 +35,7 @@ export function AppShell({
   accountName,
   roleName,
   permissions,
+  uiLocale,
   children,
 }: {
   section: TopSection;
@@ -38,12 +44,16 @@ export function AppShell({
   accountName: string;
   roleName: string | null;
   permissions: PermissionMap;
+  uiLocale: UiLocale;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [, startTransition] = useTransition();
+
+  // 訳が用意されていない文字列は日本語のまま出す
+  const t = useMemo(() => makeTranslator(uiLocale), [uiLocale]);
 
   const currentCompany = companies.find((c) => c.id === currentCompanyId);
 
@@ -52,7 +62,7 @@ export function AppShell({
     return MENU_BY_SECTION[section]
       .map((group) => ({
         key: group.key,
-        label: group.label,
+        label: t(group.label),
         type: 'group' as const,
         children: group.children
           .filter((leaf) => !leaf.feature || canView(permissions, leaf.feature))
@@ -60,16 +70,16 @@ export function AppShell({
             key: leaf.href,
             label: leaf.pending ? (
               <Tooltip title="この画面は未実装です（対応フェーズで追加）" placement="right">
-                <span style={{ opacity: 0.45 }}>{leaf.label}</span>
+                <span style={{ opacity: 0.45 }}>{t(leaf.label)}</span>
               </Tooltip>
             ) : (
-              <Link href={leaf.href}>{leaf.label}</Link>
+              <Link href={leaf.href}>{t(leaf.label)}</Link>
             ),
             disabled: leaf.pending,
           })),
       }))
       .filter((group) => group.children.length > 0);
-  }, [section, permissions]);
+  }, [section, permissions, t]);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -123,7 +133,7 @@ export function AppShell({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {tab.label}
+                {t(tab.label)}
               </Link>
             );
           })}
@@ -136,10 +146,23 @@ export function AppShell({
 
           <Dropdown
             menu={{
+              selectedKeys: [uiLocale],
+              items: UI_LOCALES.map((item) => ({ key: item.value, label: item.label })),
+              onClick: ({ key }) => startTransition(() => void setUiLocaleAction(key)),
+            }}
+          >
+            <Button type="text" style={{ color: 'rgba(255,255,255,0.65)' }}>
+              <GlobalOutlined style={{ marginRight: 6 }} />
+              {UI_LOCALES.find((item) => item.value === uiLocale)?.label}
+            </Button>
+          </Dropdown>
+
+          <Dropdown
+            menu={{
               items: [
                 { key: 'role', label: `ロール: ${roleName ?? '未割当'}`, disabled: true },
                 { type: 'divider' },
-                { key: 'logout', label: 'ログアウト', danger: true },
+                { key: 'logout', label: t('ログアウト'), danger: true },
               ],
               onClick: ({ key }) => {
                 if (key === 'logout') startTransition(() => void logoutAction());
@@ -184,7 +207,9 @@ export function AppShell({
         </Sider>
 
         <Content className="app-content" style={{ padding: 24 }}>
-          <div style={{ maxWidth: 1200, margin: '0 auto' }}>{children}</div>
+          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+            <LocaleProvider locale={uiLocale}>{children}</LocaleProvider>
+          </div>
         </Content>
       </Layout>
 

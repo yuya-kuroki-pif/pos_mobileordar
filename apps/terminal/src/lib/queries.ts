@@ -150,9 +150,11 @@ export async function getFloorMap(storeId: string): Promise<TableWithSession[]> 
  */
 export async function getMenuTree(
   storeId: string,
-  onlyOrderable = true
+  onlyOrderable = true,
+  /** 'ja' 以外なら、訳があるものだけ差し替える */
+  locale: string = 'ja'
 ): Promise<CategoryWithItems[]> {
-  if (isDemoMode()) return demo.getMenuTree(onlyOrderable);
+  if (isDemoMode()) return demo.getMenuTree(onlyOrderable, locale);
 
   const db = supabaseAdmin();
 
@@ -233,9 +235,84 @@ export async function getMenuTree(
     menusByCategory.set(link.category_id, list);
   }
 
-  return categories.map((category) => ({
+  const tree = categories.map((category) => ({
     ...category,
     items: menusByCategory.get(category.id) ?? [],
+  }));
+
+  return locale === 'ja' ? tree : applyTranslations(db, tree, locale);
+}
+
+/**
+ * カテゴリ・メニュー・オプション・選択肢の訳を当てる。
+ * 訳が無い項目は日本語のまま残す（表示が欠けるより良い）。
+ */
+async function applyTranslations(
+  db: ReturnType<typeof supabaseAdmin>,
+  tree: CategoryWithItems[],
+  locale: string
+): Promise<CategoryWithItems[]> {
+  const categoryIds = tree.map((c) => c.id);
+  const menuIds = tree.flatMap((c) => c.items.map((i) => i.id));
+  const optionIds = tree.flatMap((c) => c.items.flatMap((i) => i.option_groups.map((g) => g.id)));
+  const choiceIds = tree.flatMap((c) =>
+    c.items.flatMap((i) => i.option_groups.flatMap((g) => g.options.map((o) => o.id)))
+  );
+
+  const [catRes, menuRes, optRes, choiceRes] = await Promise.all([
+    categoryIds.length > 0
+      ? db.from('category_translations').select('category_id, name').eq('locale', locale).in('category_id', categoryIds)
+      : Promise.resolve({ data: [] }),
+    menuIds.length > 0
+      ? db.from('menu_translations').select('menu_id, name, description').eq('locale', locale).in('menu_id', menuIds)
+      : Promise.resolve({ data: [] }),
+    optionIds.length > 0
+      ? db.from('option_translations').select('option_id, name').eq('locale', locale).in('option_id', optionIds)
+      : Promise.resolve({ data: [] }),
+    choiceIds.length > 0
+      ? db.from('choice_translations').select('choice_id, name').eq('locale', locale).in('choice_id', choiceIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const categoryName = new Map(
+    ((catRes.data ?? []) as { category_id: string; name: string | null }[])
+      .filter((r) => r.name)
+      .map((r) => [r.category_id, r.name as string])
+  );
+  const menuText = new Map(
+    ((menuRes.data ?? []) as { menu_id: string; name: string | null; description: string | null }[])
+      .map((r) => [r.menu_id, r])
+  );
+  const optionName = new Map(
+    ((optRes.data ?? []) as { option_id: string; name: string | null }[])
+      .filter((r) => r.name)
+      .map((r) => [r.option_id, r.name as string])
+  );
+  const choiceName = new Map(
+    ((choiceRes.data ?? []) as { choice_id: string; name: string | null }[])
+      .filter((r) => r.name)
+      .map((r) => [r.choice_id, r.name as string])
+  );
+
+  return tree.map((category) => ({
+    ...category,
+    name: categoryName.get(category.id) ?? category.name,
+    items: category.items.map((item) => {
+      const text = menuText.get(item.id);
+      return {
+        ...item,
+        name: text?.name ?? item.name,
+        description: text?.description ?? item.description,
+        option_groups: item.option_groups.map((group) => ({
+          ...group,
+          name: optionName.get(group.id) ?? group.name,
+          options: group.options.map((option) => ({
+            ...option,
+            name: choiceName.get(option.id) ?? option.name,
+          })),
+        })),
+      };
+    }),
   }));
 }
 

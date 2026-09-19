@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 
 import { clone, db } from './demo';
 import { isDemoMode, supabaseAdmin } from './supabase';
+import type { MoLocale } from './moLocale';
 import type { Area, RestaurantTable } from './types';
 
 /** テーブル画面（仕様書 §5.19）が必要とする一式 */
@@ -42,9 +43,15 @@ export async function getTableBoard(shopId: string): Promise<TableBoard> {
 }
 
 /** モバイルオーダーの起動 URL（仕様書 §5.19） */
-export function moUrl(shopId: string, tableId: string, token: string | null): string {
+export function moUrl(
+  shopId: string,
+  tableId: string,
+  token: string | null,
+  locale: MoLocale = 'ja'
+): string {
   const base = process.env.NEXT_PUBLIC_MO_BASE_URL ?? 'http://localhost:3001';
-  return `${base}/?shopId=${shopId}&tableId=${tableId}&token=${token ?? ''}`;
+  const url = `${base}/order/${token ?? ''}`;
+  return locale === 'ja' ? url : `${url}?lang=${locale}`;
 }
 
 /** QR コードを data URL にする。画面へは画像として渡す */

@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, useTransition } from 'react';
 
 import { OptionDialog } from '@/components/OptionDialog';
 import { placeMobileOrder, requestBill } from '@/lib/actions/order';
+import { GUEST_LOCALES, makeGuestTranslator, type GuestLocale } from '@/lib/guestLocale';
 import { ORDER_ITEM_STATUS_LABEL, formatTime, formatYen } from '@/lib/format';
 import type {
   CategoryWithItems,
@@ -33,6 +34,7 @@ export function MobileOrder({
   initialItems,
   initialTotal,
   initialStatus,
+  locale,
 }: {
   token: string;
   storeName: string;
@@ -43,8 +45,10 @@ export function MobileOrder({
   initialItems: OrderItem[];
   initialTotal: SessionTotal;
   initialStatus: SessionStatus;
+  locale: GuestLocale;
 }) {
   const cart = useCart();
+  const t = makeGuestTranslator(locale);
   const [view, setView] = useState<View>('menu');
   const [dialogItem, setDialogItem] = useState<MenuItemWithOptions | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
@@ -76,13 +80,18 @@ export function MobileOrder({
             <p className="truncate font-bold">{storeName}</p>
             <p className="text-xs text-charcoal-400">{tableName}</p>
           </div>
-          <div className="no-select flex rounded-xl bg-charcoal-100 p-1">
-            <HeaderTab active={view === 'menu'} onClick={() => setView('menu')}>
-              メニュー
-            </HeaderTab>
-            <HeaderTab active={view === 'history'} onClick={() => setView('history')}>
-              注文履歴{activeItems.length > 0 && ` (${activeItems.length})`}
-            </HeaderTab>
+          <div className="flex items-center gap-2">
+            <LanguagePicker current={locale} />
+
+            <div className="no-select flex rounded-xl bg-charcoal-100 p-1">
+              <HeaderTab active={view === 'menu'} onClick={() => setView('menu')}>
+                {t('メニュー')}
+              </HeaderTab>
+              <HeaderTab active={view === 'history'} onClick={() => setView('history')}>
+                {t('注文履歴')}
+                {activeItems.length > 0 && ` (${activeItems.length})`}
+              </HeaderTab>
+            </div>
           </div>
         </div>
       </header>
@@ -119,6 +128,7 @@ export function MobileOrder({
           taxIncluded={taxIncluded}
           billRequested={billRequested}
           token={token}
+          locale={locale}
           onRequested={() => {
             refresh();
             showToast('お会計を承りました');
@@ -138,7 +148,7 @@ export function MobileOrder({
             <span className="tabular flex h-6 min-w-6 items-center justify-center rounded-full bg-white px-1.5 text-sm text-ember-700">
               {cart.count}
             </span>
-            カートを見る
+            {t('カート')}
           </span>
           <span className="tabular text-lg font-bold">{formatYen(cart.total)}</span>
         </button>
@@ -159,6 +169,7 @@ export function MobileOrder({
         <CartSheet
           token={token}
           cart={cart}
+          locale={locale}
           onClose={() => setCartOpen(false)}
           onPlaced={() => {
             setCartOpen(false);
@@ -318,6 +329,7 @@ function HistoryView({
   taxIncluded,
   billRequested,
   token,
+  locale,
   onRequested,
 }: {
   items: OrderItem[];
@@ -325,8 +337,10 @@ function HistoryView({
   taxIncluded: boolean;
   billRequested: boolean;
   token: string;
+  locale: GuestLocale;
   onRequested: () => void;
 }) {
+  const t = makeGuestTranslator(locale);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -391,7 +405,7 @@ function HistoryView({
             <span className="tabular">{formatYen(total.tax)}</span>
           </div>
           <div className="mt-2 flex items-baseline justify-between border-t border-charcoal-200 pt-2">
-            <span className="font-bold">合計</span>
+            <span className="font-bold">{t('合計')}</span>
             <span className="tabular text-2xl font-bold">{formatYen(total.total)}</span>
           </div>
           <p className="mt-2 text-[11px] text-charcoal-400">
@@ -414,7 +428,7 @@ function HistoryView({
           className="mt-5 w-full rounded-2xl border-2 border-ember-500 py-4 font-bold text-ember-600
             transition-colors active:bg-ember-50 disabled:border-charcoal-200 disabled:text-charcoal-400"
         >
-          {billRequested ? 'お会計を承っています' : 'お会計をお願いする'}
+          {billRequested ? 'お会計を承っています' : t('会計をお願いする')}
         </button>
       )}
 
@@ -447,14 +461,17 @@ function StatusPill({ status }: { status: OrderItem['status'] }) {
 function CartSheet({
   token,
   cart,
+  locale,
   onClose,
   onPlaced,
 }: {
   token: string;
   cart: ReturnType<typeof useCart>;
+  locale: GuestLocale;
   onClose: () => void;
   onPlaced: () => void;
 }) {
+  const t = makeGuestTranslator(locale);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -487,7 +504,7 @@ function CartSheet({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-charcoal-100 px-5 py-4">
-          <h2 className="text-lg font-bold">カート</h2>
+          <h2 className="text-lg font-bold">{t('カート')}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -581,5 +598,34 @@ function ThankYou({ storeName }: { storeName: string }) {
         またのご来店をお待ちしております。
       </p>
     </main>
+  );
+}
+
+
+/**
+ * 言語の切り替え（日本語 / ベトナム語 / 英語）。
+ * URL のクエリを差し替えるだけなので、同じ卓のまま言語だけ変わる。
+ */
+function LanguagePicker({ current }: { current: GuestLocale }) {
+  return (
+    <div className="no-select flex rounded-xl bg-charcoal-100 p-1 text-xs">
+      {GUEST_LOCALES.map((item) => {
+        const active = item.value === current;
+        return (
+          <a
+            key={item.value}
+            href={`?lang=${item.value}`}
+            aria-current={active ? 'true' : undefined}
+            className={
+              active
+                ? 'rounded-lg bg-white px-2 py-1 font-bold text-charcoal-900 shadow-sm'
+                : 'rounded-lg px-2 py-1 text-charcoal-400'
+            }
+          >
+            {item.label}
+          </a>
+        );
+      })}
+    </div>
   );
 }

@@ -4,6 +4,8 @@ import { ArrowLeftOutlined } from '@ant-design/icons';
 import { Breadcrumb, Button, Flex, Space, Tag, Typography } from 'antd';
 import Link from 'next/link';
 
+import { useT } from './LocaleProvider';
+
 /**
  * ページ共通の見出し（仕様書 §11 の PageHeader）。
  * パンくず → タイトル（戻る矢印つき）→ 右上アクション の順に並べる。
@@ -24,13 +26,16 @@ export function PageHeader({
   tags?: string[];
   extra?: React.ReactNode;
 }) {
+  // 訳が用意されていない文字列は日本語のまま出す
+  const t = useT();
+
   return (
     <div style={{ marginBottom: 20 }}>
       {breadcrumb && breadcrumb.length > 0 && (
         <Breadcrumb
           style={{ marginBottom: 8, fontSize: 13 }}
           items={breadcrumb.map((crumb) => ({
-            title: crumb.href ? <Link href={crumb.href}>{crumb.label}</Link> : crumb.label,
+            title: crumb.href ? <Link href={crumb.href}>{t(crumb.label)}</Link> : t(crumb.label),
           }))}
         />
       )}
@@ -44,17 +49,17 @@ export function PageHeader({
               </Link>
             )}
             <Typography.Title level={4} style={{ margin: 0 }}>
-              {title}
+              {t(title)}
             </Typography.Title>
             {tags?.map((tag) => (
               <Tag key={tag} color="blue">
-                {tag}
+                {t(tag)}
               </Tag>
             ))}
           </Space>
           {description && (
             <Typography.Text type="secondary" style={{ display: 'block', marginTop: 4, fontSize: 13 }}>
-              {description}
+              {t(description)}
             </Typography.Text>
           )}
         </div>

@@ -6,7 +6,7 @@ import type {
   Customer,
   CustomerGender,
   EmployeeReview,
-  LineOfficialAccount,
+  MessagingAccount,
   MembershipRank,
   MenuReview,
   MessageDelivery,
@@ -19,7 +19,7 @@ import type {
 
 export interface CrmState {
   customers: Customer[];
-  lineAccounts: LineOfficialAccount[];
+  messagingAccounts: MessagingAccount[];
   coupons: Coupon[];
   couponPresets: CouponPreset[];
   messageDeliveries: MessageDelivery[];
@@ -76,6 +76,8 @@ export function buildCrm(
       id: `cust-${i}`,
       corporation_id: corporationId,
       line_user_id: `U${String(i).padStart(6, '0')}`,
+      // 3 人に 1 人くらいは Zalo で繋がっている想定
+      zalo_user_id: i % 3 === 0 ? `Z${String(i).padStart(9, '0')}` : null,
       display_name: `お客様 ${i + 1}`,
       gender: genders[Math.floor(random() * genders.length)],
       birth_date: `19${70 + Math.floor(random() * 30)}-0${1 + Math.floor(random() * 9)}-15`,
@@ -121,22 +123,41 @@ export function buildCrm(
     },
   ]);
 
-  const lineAccounts: LineOfficialAccount[] = companyIds.map((companyId, index) => ({
-    id: `${companyId}-line`,
-    company_id: companyId,
-    name: index === 0 ? '炭火焼き デモ公式' : '海鮮スタンド デモ公式',
-    channel_id: `1660${index}00000`,
-    monthly_quota: 5000,
-    friends_total: 1200 + index * 300,
-    friends_active: 980 + index * 220,
-    blocked: 120 + index * 30,
-  }));
+  // 日本向けの LINE と、ベトナム向けの Zalo を 1 つずつ置く
+  const messagingAccounts: MessagingAccount[] = companyIds.flatMap((companyId, index) => [
+    {
+      id: `${companyId}-line`,
+      company_id: companyId,
+      channel: 'line' as const,
+      name: index === 0 ? '炭火焼き デモ公式' : '海鮮スタンド デモ公式',
+      channel_id: `1660${index}00000`,
+      monthly_quota: 5000,
+      zns_quota: 0,
+      friends_total: 1200 + index * 300,
+      friends_active: 980 + index * 220,
+      blocked: 120 + index * 30,
+    },
+    {
+      id: `${companyId}-zalo`,
+      company_id: companyId,
+      channel: 'zalo' as const,
+      name: index === 0 ? 'Sumibiyaki Demo OA' : 'Kaisen Stand Demo OA',
+      channel_id: `48${index}9876543210`,
+      monthly_quota: 3000,
+      zns_quota: 1500,
+      friends_total: 640 + index * 180,
+      friends_active: 520 + index * 140,
+      blocked: 45 + index * 12,
+    },
+  ]);
 
   const messageDeliveries: MessageDelivery[] = companyIds.flatMap((companyId) => [
     {
       id: `${companyId}-md-1`,
       company_id: companyId,
-      line_account_id: `${companyId}-line`,
+      channel: 'line' as const,
+      messaging_account_id: `${companyId}-line`,
+      zns_template_id: null,
       name: '週末クーポン配信',
       status: 'reserved' as const,
       target_type: 'filtered' as const,
@@ -150,8 +171,10 @@ export function buildCrm(
     {
       id: `${companyId}-md-2`,
       company_id: companyId,
-      line_account_id: `${companyId}-line`,
-      name: '休眠のお客様への再来店のご案内',
+      channel: 'zalo' as const,
+      messaging_account_id: `${companyId}-zalo`,
+      zns_template_id: 'ZNS-238110',
+      name: 'Mời khách hàng quay lại（休眠のお客様への再来店のご案内）',
       status: 'draft' as const,
       target_type: 'filtered' as const,
       filter: { daysSinceVisitFrom: 60 },
@@ -255,7 +278,7 @@ export function buildCrm(
 
   return {
     customers,
-    lineAccounts,
+    messagingAccounts,
     coupons,
     couponPresets,
     messageDeliveries,

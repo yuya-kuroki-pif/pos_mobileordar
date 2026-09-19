@@ -41,8 +41,8 @@ export default async function PreviewUserAppPage({
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="プレビューモードでは注文できません"
-        description="実際の卓に紐付かないため、カートに入れても注文は通りません。表示の確認にだけ使ってください。"
+        message="プレビュー用の入口はまだ用意できていません"
+        description="モバイルオーダー側で「注文できない閲覧モード」を実装したら、この QR から開けるようにします。いまの見え方を確かめたい場合は、テーブル画面の QR から実際の卓を開いてください。"
       />
 
       <Card>

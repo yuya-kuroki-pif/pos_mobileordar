@@ -1,14 +1,16 @@
 'use client';
 
 import { PlusOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Col, Row, Statistic, Table, Tabs, Tag } from 'antd';
+import { Alert, Button, Card, Col, Row, Statistic, Table, Tabs, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 
 import { PageHeader } from '@/components/PageHeader';
 import {
+  CHANNEL_LABELS,
   DELIVERY_STATUS_LABELS,
   type DeliveryStatus,
-  type LineOfficialAccount,
+  type MessagingAccount,
+  type MessagingChannel,
   type MessageDelivery,
 } from '@/lib/types';
 
@@ -37,10 +39,9 @@ export function MessageDeliveryView({
   companyName,
 }: {
   deliveries: MessageDelivery[];
-  accounts: LineOfficialAccount[];
+  accounts: MessagingAccount[];
   companyName: string;
 }) {
-  const account = accounts[0];
 
   function table(rows: MessageDelivery[]) {
     return (
@@ -53,7 +54,16 @@ export function MessageDeliveryView({
           pagination={false}
           locale={{ emptyText: '配信はありません' }}
           columns={[
-            { title: '配信管理名', dataIndex: 'name', width: 260, fixed: 'left' },
+            {
+              title: 'チャネル',
+              dataIndex: 'channel',
+              width: 110,
+              fixed: 'left',
+              render: (value: MessagingChannel) => (
+                <Tag color={value === 'zalo' ? 'cyan' : 'green'}>{CHANNEL_LABELS[value]}</Tag>
+              ),
+            },
+            { title: '配信管理名', dataIndex: 'name', width: 280, fixed: 'left' },
             {
               title: '配信対象',
               key: 'target',
@@ -124,24 +134,27 @@ export function MessageDeliveryView({
         type="warning"
         showIcon
         style={{ marginBottom: 16 }}
-        message="LINE への送信は未実装です"
-        description="配信の設定は保存できますが、実際にメッセージを送る仕組み（LINE Messaging API との接続）はまだ動いていません。新規作成もその実装と合わせて開けるようにします。"
+        message="LINE / Zalo への送信は未実装です"
+        description="配信の設定は保存できますが、実際にメッセージを送る仕組み（LINE Messaging API・Zalo OA API との接続）はまだ動いていません。新規作成もその実装と合わせて開けるようにします。"
       />
 
-      {account && (
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col xs={12} md={6}>
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        {accounts.map((item) => (
+          <Col key={item.id} xs={12} md={6}>
             <Card>
-              <Statistic title="今月の送信可能数" value={account.monthly_quota} suffix="通" />
+              <Statistic
+                title={`${CHANNEL_LABELS[item.channel]} 今月の送信可能数`}
+                value={item.monthly_quota}
+                suffix="通"
+              />
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                有効 {item.friends_active} 人
+                {item.channel === 'zalo' && ` / ZNS 上限 ${item.zns_quota} 通`}
+              </Typography.Text>
             </Card>
           </Col>
-          <Col xs={12} md={6}>
-            <Card>
-              <Statistic title="有効友だち数" value={account.friends_active} suffix="人" />
-            </Card>
-          </Col>
-        </Row>
-      )}
+        ))}
+      </Row>
 
       <Tabs
         items={(['reserved', 'draft', 'suspended', 'sent'] as DeliveryStatus[]).map((status) => ({

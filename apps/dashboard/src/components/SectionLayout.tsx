@@ -1,4 +1,5 @@
 import { requireSession } from '@/lib/auth';
+import { currentUiLocale } from '@/lib/localeServer';
 import type { TopSection } from '@/lib/menuTree';
 
 import { AppShell } from './AppShell';
@@ -15,6 +16,7 @@ export async function SectionLayout({
   children: React.ReactNode;
 }) {
   const session = await requireSession();
+  const uiLocale = await currentUiLocale();
 
   return (
     <AppShell
@@ -24,6 +26,7 @@ export async function SectionLayout({
       accountName={session.account.name}
       roleName={session.roleName}
       permissions={session.permissions}
+      uiLocale={uiLocale}
     >
       {children}
     </AppShell>

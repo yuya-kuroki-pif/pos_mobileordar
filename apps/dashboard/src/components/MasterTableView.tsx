@@ -19,6 +19,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
+import { useT } from '@/components/LocaleProvider';
 import { PageHeader } from '@/components/PageHeader';
 import { deleteMasterAction, saveMasterAction } from '@/lib/actions/master';
 import type { MasterBoard, MasterRow } from '@/lib/masterQueries';
@@ -48,6 +49,7 @@ export function MasterTableView({
   editable: boolean;
 }) {
   const router = useRouter();
+  const t = useT();
   const { message } = App.useApp();
   const [form] = Form.useForm();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -105,7 +107,7 @@ export function MasterTableView({
   const columns = def.fields
     .filter((field) => !field.formOnly)
     .map((field) => ({
-      title: field.label,
+      title: t(field.label),
       dataIndex: field.key,
       width: field.width,
       align: (field.type === 'number' || field.type === 'money' ? 'right' : undefined) as
@@ -131,8 +133,8 @@ export function MasterTableView({
   return (
     <>
       <PageHeader
-        title={def.title}
-        description={def.description}
+        title={t(def.title)}
+        description={t(def.description)}
         breadcrumb={[{ label: companyName }, ...def.breadcrumb.map((label) => ({ label }))]}
         extra={
           <Space>
@@ -150,7 +152,7 @@ export function MasterTableView({
               disabled={!editable}
               onClick={() => openModal(null)}
             >
-              新規作成
+              {t('新規作成')}
             </Button>
           </Space>
         }
@@ -201,9 +203,9 @@ export function MasterTableView({
 
       <Modal
         open={open}
-        title={editingId ? `${def.title}を編集` : `${def.title}を新規作成`}
-        okText="保存"
-        cancelText="キャンセル"
+        title={editingId ? `${t(def.title)}を編集` : `${t(def.title)}を新規作成`}
+        okText={t('保存')}
+        cancelText={t('キャンセル')}
         confirmLoading={pending}
         width={520}
         onOk={submit}
@@ -214,7 +216,7 @@ export function MasterTableView({
             <Form.Item
               key={field.key}
               name={field.key}
-              label={field.label}
+              label={t(field.label)}
               extra={field.extra}
               valuePropName={field.type === 'switch' ? 'checked' : undefined}
               rules={
