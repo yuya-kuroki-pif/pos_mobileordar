@@ -40,3 +40,6 @@ yarn-error.log*
 .vscode/*
 !.vscode/extensions.json
 .idea
+
+# Claude Code のローカル設定（launch.json はチーム共有するため除外しない）
+.claude/settings.local.json
