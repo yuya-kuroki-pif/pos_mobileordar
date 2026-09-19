@@ -199,7 +199,7 @@ export const AI_MENU: MenuGroup[] = [
     key: 'ai',
     label: 'AI',
     children: [
-      { key: 'assessment', label: 'AI 店舗診断', href: '/shop-assessment', feature: 'analytics', pending: true },
+      { key: 'assessment', label: 'AI 店舗診断', href: '/shop-assessment', feature: 'analytics' },
     ],
   },
 ];
@@ -209,7 +209,7 @@ export const ATTRACT_MENU: MenuGroup[] = [
     key: 'attract',
     label: '集客',
     children: [
-      { key: 'attract-dashboard', label: '集客ダッシュボード', href: '/attract/dashboard', feature: 'attract_all', pending: true },
+      { key: 'attract-dashboard', label: '集客ダッシュボード', href: '/attract/dashboard', feature: 'attract_all' },
       { key: 'review', label: 'クチコミ獲得', href: '/attract/review', feature: 'attract_all', pending: true },
     ],
   },
