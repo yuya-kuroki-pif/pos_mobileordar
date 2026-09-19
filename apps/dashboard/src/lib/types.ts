@@ -176,3 +176,47 @@ export interface OptionRow extends OptionDef {
   choices: Choice[];
   menu_names: string[];
 }
+
+/** 店舗ごとの取扱設定（仕様書 §8.3 の shop_menus / §5.3 取扱設定タブ） */
+export interface ShopMenu {
+  shop_id: string;
+  menu_id: string;
+  is_dealing: boolean;
+  is_visible_customer: boolean;
+  is_visible_staff: boolean;
+  in_stock: boolean;
+  /** null は「無制限」 */
+  stock_qty: number | null;
+  /** null は「未設定」。毎日リセットされる */
+  daily_stock_qty: number | null;
+  display_order: number;
+}
+
+export type Locale = 'en' | 'zh-CN' | 'ko' | 'ne' | 'vi' | 'my';
+
+export const LOCALES: { value: Locale; label: string }[] = [
+  { value: 'en', label: '英語' },
+  { value: 'zh-CN', label: '中国語（簡体字）' },
+  { value: 'ko', label: '韓国語' },
+  { value: 'ne', label: 'ネパール語' },
+  { value: 'vi', label: 'ベトナム語' },
+  { value: 'my', label: 'ミャンマー語' },
+];
+
+export interface MenuTranslation {
+  menu_id: string;
+  locale: Locale;
+  name: string | null;
+  description: string | null;
+  featured_label: string | null;
+}
+
+/** メニュー編集画面が必要とする一式（§5.3） */
+export interface MenuDetail {
+  menu: Menu;
+  categoryIds: string[];
+  optionIds: string[];
+  /** 取扱設定タブ。業態配下の全店舗ぶん（未設定の店舗も行として出す） */
+  dealers: (ShopMenu & { shop_name: string })[];
+  translations: MenuTranslation[];
+}

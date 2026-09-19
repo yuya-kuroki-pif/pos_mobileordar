@@ -1,7 +1,8 @@
 'use client';
 
 import { PlusOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Flex, Input, Segmented, Select, Space, Table, Tag } from 'antd';
+import { Button, Card, Flex, Input, Segmented, Select, Space, Table, Tag } from 'antd';
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
@@ -66,19 +67,13 @@ export function MenuListView({
         extra={
           <Space>
             <Button disabled>表示順編集</Button>
-            <Button type="primary" icon={<PlusOutlined />} disabled={!editable}>
-              新規作成
-            </Button>
+            <Link href="/menu/new/edit">
+              <Button type="primary" icon={<PlusOutlined />} disabled={!editable}>
+                新規作成
+              </Button>
+            </Link>
           </Space>
         }
-      />
-
-      <Alert
-        type="info"
-        showIcon
-        message="編集画面は未実装です"
-        description="一覧・絞り込み・表示切替までを実装しています。メニュー編集（基本情報 / オプション / 取扱設定 / 多言語）は続けて作ります。"
-        style={{ marginBottom: 16 }}
       />
 
       <Card styles={{ body: { padding: 0 } }}>
@@ -138,7 +133,7 @@ export function MenuListView({
               fixed: 'left',
               render: (value: string, row) => (
                 <Space size={4}>
-                  {value}
+                  <Link href={`/menu/${row.id}/edit`}>{value}</Link>
                   {row.is_notice_only && <Tag>案内</Tag>}
                   {row.is_free_key && <Tag color="purple">フリーキー</Tag>}
                 </Space>

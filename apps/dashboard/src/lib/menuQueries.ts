@@ -1,8 +1,17 @@
 import 'server-only';
 
-import * as demo from './demo';
+import * as demo from './demoMenu';
 import { isDemoMode, supabaseAdmin } from './supabase';
-import type { CategoryRow, Choice, MenuRow, OptionRow } from './types';
+import type {
+  CategoryRow,
+  Choice,
+  Menu,
+  MenuDetail,
+  MenuRow,
+  MenuTranslation,
+  OptionRow,
+  ShopMenu,
+} from './types';
 
 /**
  * メニューマスターの読み取り（仕様書 §5.2 / §5.5 / §5.6）。
@@ -117,4 +126,52 @@ export async function getOptionRows(companyId: string): Promise<OptionRow[]> {
       .map((l) => menuName.get(l.menu_id))
       .filter((name): name is string => Boolean(name)),
   }));
+}
+
+/** メニュー編集画面が必要とする一式（仕様書 §5.3 の 4 タブぶん） */
+export async function getMenuDetail(menuId: string): Promise<MenuDetail | null> {
+  if (isDemoMode()) return demo.getMenuDetail(menuId);
+
+  const db = supabaseAdmin();
+
+  const { data: menuData } = await db.from('menus').select('*').eq('id', menuId).maybeSingle();
+  const menu = menuData as Menu | null;
+  if (!menu) return null;
+
+  const [catRes, optRes, shopRes, dealRes, transRes] = await Promise.all([
+    db.from('category_menus').select('category_id').eq('menu_id', menuId),
+    db.from('menu_options').select('option_id').eq('menu_id', menuId),
+    db.from('shops').select('id, name, display_order').eq('company_id', menu.company_id).order('display_order'),
+    db.from('shop_menus').select('*').eq('menu_id', menuId),
+    db.from('menu_translations').select('*').eq('menu_id', menuId),
+  ]);
+
+  for (const res of [catRes, optRes, shopRes, dealRes, transRes]) {
+    if (res.error) throw new Error(res.error.message);
+  }
+
+  const deals = (dealRes.data ?? []) as ShopMenu[];
+
+  return {
+    menu,
+    categoryIds: ((catRes.data ?? []) as { category_id: string }[]).map((r) => r.category_id),
+    optionIds: ((optRes.data ?? []) as { option_id: string }[]).map((r) => r.option_id),
+    // 取扱設定タブは業態配下の全店舗を並べる（未設定の店舗も行として出す）
+    dealers: ((shopRes.data ?? []) as { id: string; name: string }[]).map((shop) => {
+      const row = deals.find((d) => d.shop_id === shop.id);
+      return {
+        shop_id: shop.id,
+        menu_id: menuId,
+        shop_name: shop.name,
+        is_dealing: row?.is_dealing ?? false,
+        is_visible_customer: row?.is_visible_customer ?? false,
+        is_visible_staff: row?.is_visible_staff ?? false,
+        in_stock: row?.in_stock ?? true,
+        stock_qty: row?.stock_qty ?? null,
+        daily_stock_qty: row?.daily_stock_qty ?? null,
+        display_order: row?.display_order ?? 0,
+      };
+    }),
+    translations: (transRes.data ?? []) as MenuTranslation[],
+  };
 }
