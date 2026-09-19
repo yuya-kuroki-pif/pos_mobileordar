@@ -282,6 +282,17 @@ export interface KitchenPrinter {
   shop_id: string;
   name: string;
   display_order: number;
+  // --- 印刷設定（§5.15） ---
+  notify_mobile_payment: boolean;
+  print_call_slip: boolean;
+  print_checkout_slip: boolean;
+  print_dish_up_slip: boolean;
+  print_table_move_slip: boolean;
+  dish_up_layout: string | null;
+  print_sound: PrintSound;
+  /** 緊急時の自動振替先 */
+  fallback_printer_1_id: string | null;
+  fallback_printer_2_id: string | null;
 }
 
 /** デシャップグループ（仕様書 §5.16） */
@@ -508,4 +519,141 @@ export interface PaymentSettings {
   discountTypes: DiscountType[];
   inflowSources: InflowSource[];
   terminals: TerminalPaymentMethod[];
+}
+
+// ---------------------------------------------------------------------------
+// P1 の残り（仕様書 §5.7 / §5.9 / §5.11 / §5.14〜§5.19）
+// ---------------------------------------------------------------------------
+
+/** おすすめメニューのセット（§5.7） */
+export interface RecommendationSet {
+  id: string;
+  company_id: string;
+  name: string;
+  display_name: string | null;
+  display_order: number;
+}
+
+export interface ShopRecommendation {
+  shop_id: string;
+  set_id: string | null;
+  is_visible: boolean;
+}
+
+/** 自動翻訳設定（§5.9） */
+export interface AutoTranslationSetting {
+  company_id: string;
+  is_enabled: boolean;
+  target_menu: boolean;
+  target_plan: boolean;
+  target_option: boolean;
+  target_category: boolean;
+  target_recommendation: boolean;
+}
+
+/** お通し自動設定（§5.9） */
+export interface CompulsoryAppetizer {
+  id: string;
+  company_id: string;
+  name: string;
+  menu_id: string | null;
+  price: number;
+  start_min: number;
+  end_min: number;
+  display_order: number;
+}
+
+export interface ShopAppetizer {
+  shop_id: string;
+  appetizer_id: string;
+  is_auto_order: boolean;
+}
+
+/** 自動釣銭機設定（§5.9） */
+export interface CashChangerSetting {
+  shop_id: string;
+  keep_float_in_changer: boolean;
+  allow_external_deposit: boolean;
+  allow_emergency_cash: boolean;
+}
+
+/** モバイルオーダーデザイン設定（§5.11） */
+export type MoTheme = 'light' | 'dark';
+
+export interface MobileOrderDesign {
+  company_id: string;
+  menu_theme: MoTheme;
+  checkin_theme: MoTheme;
+}
+
+/** アプリ表示時間設定（§5.14）。day_of_week は 0=日 … 6=土、7=祝日 */
+export interface OrderableTime {
+  id: string;
+  company_id: string;
+  name: string;
+}
+
+export interface OrderableTimeSlot {
+  orderable_time_id: string;
+  day_of_week: number;
+  start_min: number;
+  end_min: number;
+}
+
+export const DAY_LABELS = ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日', '祝日'];
+
+/** 印刷音（§5.15） */
+export type PrintSound = 'a' | 'b' | 'none';
+
+/** 調理アイテム（§5.16） */
+export interface CookingItem {
+  id: string;
+  shop_id: string;
+  name: string;
+  kitchen_printer_id: string | null;
+  display_order: number;
+}
+
+/** 店員（§5.17） */
+export interface Clerk {
+  id: string;
+  shop_id: string;
+  name: string;
+  is_visible: boolean;
+  display_order: number;
+}
+
+/** ハンディ端末（§5.18） */
+export interface HandyTerminal {
+  id: string;
+  shop_id: string;
+  name: string;
+  device_id: string | null;
+  status: string;
+  app_version: string | null;
+  native_version: string | null;
+  brand: string | null;
+  model: string | null;
+  os_name: string | null;
+  os_version: string | null;
+  registered_at: string;
+}
+
+/** エリア（§5.19） */
+export interface Area {
+  id: string;
+  shop_id: string;
+  name: string;
+  display_order: number;
+}
+
+export interface RestaurantTable {
+  id: string;
+  store_id: string;
+  area_id: string | null;
+  name: string;
+  seats: number | null;
+  qr_token: string | null;
+  sort_order: number;
+  is_active: boolean;
 }

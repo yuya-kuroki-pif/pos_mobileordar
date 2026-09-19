@@ -4,6 +4,20 @@ import { buildMenuMaster } from './demoMenu';
 import { buildPlanGroups, buildPlans, type PlanState } from './demoPlan';
 import type {
   Account,
+  Area,
+  AutoTranslationSetting,
+  CashChangerSetting,
+  Clerk,
+  CompulsoryAppetizer,
+  CookingItem,
+  HandyTerminal,
+  MobileOrderDesign,
+  OrderableTime,
+  OrderableTimeSlot,
+  RecommendationSet,
+  RestaurantTable,
+  ShopAppetizer,
+  ShopRecommendation,
   AccountRole,
   BusinessHour,
   Category,
@@ -67,6 +81,24 @@ export interface DemoState extends PlanState {
   discountTypes: DiscountType[];
   inflowSources: InflowSource[];
   terminalPaymentMethods: TerminalPaymentMethod[];
+
+  // --- P1 の残り（§5.7 / §5.9 / §5.11 / §5.14〜§5.19） ---
+  recommendationSets: RecommendationSet[];
+  recommendationMenus: { set_id: string; menu_id: string; display_order: number }[];
+  shopRecommendations: ShopRecommendation[];
+  autoTranslationSettings: AutoTranslationSetting[];
+  compulsoryAppetizers: CompulsoryAppetizer[];
+  shopAppetizers: ShopAppetizer[];
+  cashChangerSettings: CashChangerSetting[];
+  mobileOrderDesigns: MobileOrderDesign[];
+  orderableTimes: OrderableTime[];
+  orderableTimeSlots: OrderableTimeSlot[];
+  shopOrderableTimes: { shop_id: string; orderable_time_id: string }[];
+  cookingItems: CookingItem[];
+  clerks: Clerk[];
+  handyTerminals: HandyTerminal[];
+  areas: Area[];
+  restaurantTables: RestaurantTable[];
 }
 
 function shop(
@@ -306,6 +338,10 @@ function createState(): DemoState {
     planGroups: buildPlanGroups(),
     ...buildPlans(shops),
     ...buildPaymentSettings(companies.map((c) => c.id)),
+    ...buildP1Rest(
+      shops.map((s) => ({ id: s.id, company_id: s.company_id })),
+      companies.map((c) => c.id)
+    ),
     // 既定では全店舗が全品を扱う
     shopMenus: shops.flatMap((shop) =>
       master.menus
@@ -325,11 +361,27 @@ function createState(): DemoState {
           display_order: menu.display_order,
         }))
     ),
-    kitchenPrinters: shops.flatMap((shop) => [
-      { id: `${shop.id}-kp-1`, shop_id: shop.id, name: 'キッチン', display_order: 10 },
-      { id: `${shop.id}-kp-2`, shop_id: shop.id, name: 'ドリンク場', display_order: 20 },
-      { id: `${shop.id}-kp-3`, shop_id: shop.id, name: 'レジ', display_order: 30 },
-    ]),
+    kitchenPrinters: shops.flatMap((shop) =>
+      [
+        { suffix: 'kp-1', name: 'キッチン', order: 10, call: true, dishUp: true },
+        { suffix: 'kp-2', name: 'ドリンク場', order: 20, call: true, dishUp: false },
+        { suffix: 'kp-3', name: 'レジ', order: 30, call: false, dishUp: false },
+      ].map((p) => ({
+        id: `${shop.id}-${p.suffix}`,
+        shop_id: shop.id,
+        name: p.name,
+        display_order: p.order,
+        notify_mobile_payment: p.suffix === 'kp-3',
+        print_call_slip: p.call,
+        print_checkout_slip: p.suffix === 'kp-3',
+        print_dish_up_slip: p.dishUp,
+        print_table_move_slip: false,
+        dish_up_layout: null,
+        print_sound: 'none' as const,
+        fallback_printer_1_id: null,
+        fallback_printer_2_id: null,
+      }))
+    ),
     dishUpSlipGroups: shops.flatMap((shop) => [
       { id: `${shop.id}-ds-1`, shop_id: shop.id, name: '焼き場', display_order: 10 },
       { id: `${shop.id}-ds-2`, shop_id: shop.id, name: '冷菜', display_order: 20 },
@@ -341,7 +393,7 @@ function createState(): DemoState {
 // HMR でモジュールが作り直されてもデータが消えないよう globalThis に置く。
 // ただし DemoState の形を変えたときは作り直したいので、版を添えて持つ。
 // （版を上げ忘れると、古い形のまま参照して実行時エラーになる）
-const STATE_VERSION = 7;
+const STATE_VERSION = 8;
 
 const g = globalThis as typeof globalThis & {
   __dashboardDemo?: { version: number; state: DemoState };
@@ -483,4 +535,127 @@ function buildPaymentSettings(companyIds: string[]) {
   }
 
   return { paymentMethods: methods, discountTypes, inflowSources, terminalPaymentMethods: [] };
+}
+
+/** P1 の残り（§5.7 / §5.9 / §5.11 / §5.14〜§5.19）のデモデータ */
+function buildP1Rest(shops: { id: string; company_id: string }[], companyIds: string[]) {
+  const recommendationSets: RecommendationSet[] = companyIds.map((companyId, index) => ({
+    id: `${companyId}-rs-1`,
+    company_id: companyId,
+    name: '定番おすすめ',
+    display_name: '当店のおすすめ',
+    display_order: (index + 1) * 10,
+  }));
+
+  const compulsoryAppetizers: CompulsoryAppetizer[] = companyIds.map((companyId) => ({
+    id: `${companyId}-ap-1`,
+    company_id: companyId,
+    name: 'お通し（夜）',
+    menu_id: null,
+    price: 400,
+    start_min: 17 * 60,
+    end_min: 23 * 60 + 30,
+    display_order: 10,
+  }));
+
+  const orderableTimes: OrderableTime[] = companyIds.map((companyId) => ({
+    id: `${companyId}-ot-1`,
+    company_id: companyId,
+    name: 'ディナー営業',
+  }));
+
+  // 月〜日を同じ時間帯にしておく。祝日（7）は未設定＝表示しない
+  const orderableTimeSlots: OrderableTimeSlot[] = orderableTimes.flatMap((time) =>
+    [0, 1, 2, 3, 4, 5, 6].map((day) => ({
+      orderable_time_id: time.id,
+      day_of_week: day,
+      start_min: 17 * 60,
+      end_min: 23 * 60 + 30,
+    }))
+  );
+
+  const areas: Area[] = shops.flatMap((shop) => [
+    { id: `${shop.id}-area-1`, shop_id: shop.id, name: '1F カウンター', display_order: 10 },
+    { id: `${shop.id}-area-2`, shop_id: shop.id, name: '2F テーブル', display_order: 20 },
+  ]);
+
+  const restaurantTables: RestaurantTable[] = areas.flatMap((area, areaIndex) =>
+    [1, 2, 3].map((n) => ({
+      id: `${area.id}-t${n}`,
+      store_id: area.shop_id,
+      area_id: area.id,
+      name: areaIndex % 2 === 0 ? `カウンター${n}` : `テーブル${n}`,
+      seats: areaIndex % 2 === 0 ? 1 : 4,
+      qr_token: `${area.id}-t${n}-token`,
+      sort_order: n * 10,
+      is_active: true,
+    }))
+  );
+
+  return {
+    recommendationSets,
+    recommendationMenus: [],
+    shopRecommendations: shops.map((shop) => ({
+      shop_id: shop.id,
+      set_id: `${shop.company_id}-rs-1`,
+      is_visible: true,
+    })),
+    autoTranslationSettings: companyIds.map((companyId) => ({
+      company_id: companyId,
+      is_enabled: false,
+      target_menu: true,
+      target_plan: true,
+      target_option: true,
+      target_category: true,
+      target_recommendation: true,
+    })),
+    compulsoryAppetizers,
+    shopAppetizers: shops.map((shop) => ({
+      shop_id: shop.id,
+      appetizer_id: `${shop.company_id}-ap-1`,
+      is_auto_order: false,
+    })),
+    cashChangerSettings: shops.map((shop) => ({
+      shop_id: shop.id,
+      keep_float_in_changer: false,
+      allow_external_deposit: false,
+      allow_emergency_cash: false,
+    })),
+    mobileOrderDesigns: companyIds.map((companyId) => ({
+      company_id: companyId,
+      menu_theme: 'light' as const,
+      checkin_theme: 'light' as const,
+    })),
+    orderableTimes,
+    orderableTimeSlots,
+    shopOrderableTimes: shops.map((shop) => ({
+      shop_id: shop.id,
+      orderable_time_id: `${shop.company_id}-ot-1`,
+    })),
+    cookingItems: shops.flatMap((shop) => [
+      { id: `${shop.id}-ci-1`, shop_id: shop.id, name: '焼き物', kitchen_printer_id: `${shop.id}-kp-1`, display_order: 10 },
+      { id: `${shop.id}-ci-2`, shop_id: shop.id, name: '揚げ物', kitchen_printer_id: `${shop.id}-kp-1`, display_order: 20 },
+    ]),
+    clerks: shops.flatMap((shop) => [
+      { id: `${shop.id}-clerk-1`, shop_id: shop.id, name: '山田', is_visible: true, display_order: 10 },
+      { id: `${shop.id}-clerk-2`, shop_id: shop.id, name: '鈴木', is_visible: true, display_order: 20 },
+      { id: `${shop.id}-clerk-3`, shop_id: shop.id, name: '佐藤', is_visible: false, display_order: 30 },
+    ]),
+    handyTerminals: shops.map((shop, index) => ({
+      id: `${shop.id}-handy-1`,
+      shop_id: shop.id,
+      name: `ハンディ${index + 1}`,
+      device_id: `DEV-${index + 1}0001`,
+      status: 'active',
+      app_version: '1.12.0',
+      native_version: '3.4.1',
+      brand: 'Generic',
+      model: 'HT-10',
+      os_name: 'Android',
+      os_version: '13',
+      registered_at: '2026-09-01T09:00:00+09:00',
+    })),
+    areas,
+    restaurantTables,
+  };
 }
