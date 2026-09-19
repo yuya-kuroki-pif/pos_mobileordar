@@ -8,7 +8,7 @@ import type { FeatureKey } from './permissions';
  * それぞれ専用に作る。
  */
 
-export type MasterScope = 'company' | 'shop';
+export type MasterScope = 'corporation' | 'company' | 'shop';
 
 /** select の選択肢をどこから作るか */
 export type OptionSource = 'kitchenPrinters' | 'menus';
@@ -162,5 +162,67 @@ export const MASTERS: Record<string, MasterDef> = {
       ORDER_FIELD,
     ],
     needs: ['kitchenPrinters'],
+  },
+
+  plAccount: {
+    key: 'plAccount',
+    table: 'pl_accounts',
+    demoKey: 'plAccounts',
+    scope: 'corporation',
+    title: '科目',
+    description: '損益計算書の科目。仕入れや小口現金の登録先になります',
+    breadcrumb: ['経営管理', '科目登録'],
+    feature: 'pl_accounts',
+    fields: [
+      { key: 'code', label: 'コード', type: 'text', width: 100, placeholder: '例: 5100' },
+      {
+        key: 'pl_section',
+        label: 'PL区分',
+        type: 'enum',
+        required: true,
+        width: 140,
+        choices: [
+          { value: 'sales', label: '売上' },
+          { value: 'cogs', label: '売上原価' },
+          { value: 'labor', label: '人件費' },
+          { value: 'sga', label: '販売管理費' },
+        ],
+        defaultValue: 'cogs',
+      },
+      { key: 'name', label: '科目名', type: 'text', required: true, width: 180, placeholder: '例: 仕入高' },
+      { key: 'sub_name', label: '補助科目名', type: 'text', width: 160, defaultValue: null },
+      {
+        key: 'cost_class',
+        label: '費用分類',
+        type: 'enum',
+        width: 120,
+        choices: [
+          { value: 'variable', label: '変動費' },
+          { value: 'fixed', label: '固定費' },
+        ],
+        defaultValue: null,
+      },
+      { key: 'petty_cash_usable', label: '小口現金で使う', type: 'switch', width: 150 },
+      { key: 'is_visible', label: '表示', type: 'switch', width: 100, defaultValue: true },
+      { key: 'note', label: '備考', type: 'text', formOnly: true, defaultValue: null },
+      ORDER_FIELD,
+    ],
+  },
+
+  vendor: {
+    key: 'vendor',
+    table: 'vendors',
+    demoKey: 'vendors',
+    scope: 'corporation',
+    title: '取引先',
+    description: '仕入れや支払いの相手先',
+    breadcrumb: ['経営管理', '取引先登録'],
+    feature: 'vendor_registration',
+    fields: [
+      { key: 'name', label: '取引先名', type: 'text', required: true, placeholder: '例: 山田酒店' },
+      { key: 'kind', label: '種別', type: 'text', width: 160, defaultValue: null, placeholder: '例: 酒類' },
+      { key: 'note', label: '備考', type: 'text', defaultValue: null },
+      ORDER_FIELD,
+    ],
   },
 };

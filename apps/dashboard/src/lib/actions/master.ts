@@ -34,6 +34,7 @@ function lookup(masterKey: string): MasterDef {
 }
 
 function scopeColumn(def: MasterDef) {
+  if (def.scope === 'corporation') return 'corporation_id';
   return def.scope === 'company' ? 'company_id' : 'shop_id';
 }
 
@@ -79,6 +80,9 @@ export async function saveMasterAction(
     }
     if (def.scope === 'company' && scopeId !== session.currentCompanyId) {
       return { ok: false, error: 'この業態を編集する権限がありません。' };
+    }
+    if (def.scope === 'corporation' && scopeId !== session.corporation.id) {
+      return { ok: false, error: 'この法人を編集する権限がありません。' };
     }
 
     const payload = pickFields(def, values);

@@ -19,7 +19,12 @@ export async function renderMasterPage(masterKey: string, shopParam?: string) {
   // shop スコープの画面は、業態配下の店舗から 1 つ選ぶ
   const shops = session.shops.filter((shop) => shop.company_id === companyId);
   const currentShop = shops.find((shop) => shop.id === shopParam) ?? shops[0];
-  const scopeId = def.scope === 'company' ? companyId : (currentShop?.id ?? '');
+  const scopeId =
+    def.scope === 'corporation'
+      ? session.corporation.id
+      : def.scope === 'company'
+        ? companyId
+        : (currentShop?.id ?? '');
 
   if (!scopeId) {
     return (

@@ -13,6 +13,7 @@ export interface MasterBoard {
 }
 
 function scopeColumn(def: MasterDef) {
+  if (def.scope === 'corporation') return 'corporation_id';
   return def.scope === 'company' ? 'company_id' : 'shop_id';
 }
 

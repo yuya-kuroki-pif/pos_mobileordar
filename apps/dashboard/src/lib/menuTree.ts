@@ -138,8 +138,8 @@ export const BI_MENU: MenuGroup[] = [
     label: 'ダッシュボード',
     children: [
       { key: 'fl', label: '店舗管理ダッシュボード', href: '/bi/flDashboard', feature: 'bi_integration' },
-      { key: 'current', label: '売上速報', href: '/bi/current-sales', feature: 'analytics', pending: true },
-      { key: 'daily-report', label: '日報', href: '/bi/dailySalesReport', feature: 'analytics', pending: true },
+      { key: 'current', label: '売上速報', href: '/bi/current-sales', feature: 'analytics' },
+      { key: 'daily-report', label: '日報', href: '/bi/dailySalesReport', feature: 'analytics' },
     ],
   },
   {
@@ -156,7 +156,7 @@ export const BI_MENU: MenuGroup[] = [
     children: [
       { key: 'sales', label: '売上分析', href: '/bi/sales-analytics', feature: 'analytics' },
       { key: 'product', label: '商品分析', href: '/bi/product-analytics', feature: 'analytics' },
-      { key: 'dow-hour', label: '曜日・時間帯別', href: '/bi/dow-hour', feature: 'analytics', pending: true },
+      { key: 'dow-hour', label: '曜日・時間帯別', href: '/bi/dow-hour', feature: 'analytics' },
       { key: 'forecast', label: '売上予測', href: '/bi/sales-forecast', feature: 'analytics', pending: true },
     ],
   },
@@ -173,8 +173,8 @@ export const BI_MENU: MenuGroup[] = [
     key: 'bi-master',
     label: '科目・取引先登録',
     children: [
-      { key: 'pl-accounts', label: '科目登録', href: '/bi/plAccounts', feature: 'pl_accounts', pending: true },
-      { key: 'vendors', label: '取引先登録', href: '/bi/vendors', feature: 'vendor_registration', pending: true },
+      { key: 'pl-accounts', label: '科目登録', href: '/bi/plAccounts', feature: 'pl_accounts' },
+      { key: 'vendors', label: '取引先登録', href: '/bi/vendors', feature: 'vendor_registration' },
     ],
   },
 ];
