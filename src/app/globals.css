@@ -1,0 +1,84 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   デザイントークン
+   炭火・炉端の店をイメージした暖色寄りのパレット。
+   POS / KDS は店内の暗い照明でも見やすいよう、濃い背景に明るい文字を載せる。
+--------------------------------------------------------------------------- */
+@theme {
+  --color-charcoal-50: #f7f6f4;
+  --color-charcoal-100: #e8e5e0;
+  --color-charcoal-200: #cfc9c1;
+  --color-charcoal-300: #a9a199;
+  --color-charcoal-400: #7d746c;
+  --color-charcoal-500: #5a524b;
+  --color-charcoal-600: #423c37;
+  --color-charcoal-700: #2f2a26;
+  --color-charcoal-800: #1f1b18;
+  --color-charcoal-900: #14110f;
+
+  --color-ember-50: #fff5ed;
+  --color-ember-100: #ffe6d3;
+  --color-ember-200: #ffc8a5;
+  --color-ember-300: #ffa26d;
+  --color-ember-400: #ff7a3d;
+  --color-ember-500: #f75f1e;
+  --color-ember-600: #e04613;
+  --color-ember-700: #b93512;
+  --color-ember-800: #932c16;
+  --color-ember-900: #772715;
+
+  --font-sans:
+    'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Noto Sans JP', Meiryo, system-ui,
+    -apple-system, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  /* 日本語の数字と英数字が混ざるので、等幅寄りの字形にして桁を揃えやすくする */
+  font-feature-settings: 'palt' 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 金額表示。桁が動いてもガタつかないよう等幅数字にする */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* タブレットの誤タップを防ぐため、業務画面ではテキスト選択を無効化する */
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 数値入力のスピナーを消す（POS では使わない） */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* QR コード印刷用。画面上の操作 UI は印刷しない */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12mm;
+  }
+  .print-card {
+    break-inside: avoid;
+    border: 1px solid #ddd;
+  }
+}
