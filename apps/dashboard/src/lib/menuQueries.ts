@@ -87,13 +87,16 @@ export async function getCategoryRows(companyId: string): Promise<CategoryRow[]>
   );
   const links = (linkRes.data ?? []) as { category_id: string; menu_id: string }[];
 
-  return ((catRes.data ?? []) as CategoryRow[]).map((category) => ({
-    ...category,
-    menu_names: links
-      .filter((l) => l.category_id === category.id)
-      .map((l) => menuName.get(l.menu_id))
-      .filter((name): name is string => Boolean(name)),
-  }));
+  return ((catRes.data ?? []) as CategoryRow[]).map((category) => {
+    const own = links.filter((l) => l.category_id === category.id);
+    return {
+      ...category,
+      menu_names: own
+        .map((l) => menuName.get(l.menu_id))
+        .filter((name): name is string => Boolean(name)),
+      menu_ids: own.map((l) => l.menu_id),
+    };
+  });
 }
 
 export async function getOptionRows(companyId: string): Promise<OptionRow[]> {
@@ -118,14 +121,17 @@ export async function getOptionRows(companyId: string): Promise<OptionRow[]> {
   );
   const links = (linkRes.data ?? []) as { menu_id: string; option_id: string }[];
 
-  return ((optRes.data ?? []) as OptionRow[]).map((option) => ({
-    ...option,
-    choices: choices.filter((c) => c.option_id === option.id),
-    menu_names: links
-      .filter((l) => l.option_id === option.id)
-      .map((l) => menuName.get(l.menu_id))
-      .filter((name): name is string => Boolean(name)),
-  }));
+  return ((optRes.data ?? []) as OptionRow[]).map((option) => {
+    const own = links.filter((l) => l.option_id === option.id);
+    return {
+      ...option,
+      choices: choices.filter((c) => c.option_id === option.id),
+      menu_names: own
+        .map((l) => menuName.get(l.menu_id))
+        .filter((name): name is string => Boolean(name)),
+      menu_ids: own.map((l) => l.menu_id),
+    };
+  });
 }
 
 /** メニュー編集画面が必要とする一式（仕様書 §5.3 の 4 タブぶん） */

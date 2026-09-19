@@ -169,12 +169,14 @@ export interface MenuRow extends Menu {
 /** カテゴリ一覧の 1 行（§5.6 の列） */
 export interface CategoryRow extends Category {
   menu_names: string[];
+  menu_ids: string[];
 }
 
 /** オプション一覧の 1 行（§5.5 の列） */
 export interface OptionRow extends OptionDef {
   choices: Choice[];
   menu_names: string[];
+  menu_ids: string[];
 }
 
 /** 店舗ごとの取扱設定（仕様書 §8.3 の shop_menus / §5.3 取扱設定タブ） */

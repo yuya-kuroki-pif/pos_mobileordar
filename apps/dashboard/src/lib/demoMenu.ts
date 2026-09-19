@@ -197,6 +197,9 @@ export function getCategoryRows(companyId: string): CategoryRow[] {
       menu_names: state.categoryMenus
         .filter((l) => l.category_id === category.id)
         .map((l) => state.menus.find((m) => m.id === l.menu_id)?.name ?? ''),
+      menu_ids: state.categoryMenus
+        .filter((l) => l.category_id === category.id)
+        .map((l) => l.menu_id),
     }));
 }
 
@@ -211,6 +214,9 @@ export function getOptionRows(companyId: string): OptionRow[] {
       menu_names: state.menuOptions
         .filter((l) => l.option_id === option.id)
         .map((l) => state.menus.find((m) => m.id === l.menu_id)?.name ?? ''),
+      menu_ids: state.menuOptions
+        .filter((l) => l.option_id === option.id)
+        .map((l) => l.menu_id),
     }));
 }
 
@@ -342,4 +348,122 @@ export function saveMenuTranslations(menuId: string, rows: MenuTranslation[]): v
   const state = db();
   state.menuTranslations = state.menuTranslations.filter((t) => t.menu_id !== menuId);
   state.menuTranslations.push(...rows.map((row) => ({ ...row, menu_id: menuId })));
+}
+
+// ---------------------------------------------------------------------------
+// カテゴリの編集（仕様書 §5.6）
+// ---------------------------------------------------------------------------
+
+export function saveCategory(
+  companyId: string,
+  input: Partial<Category> & { id?: string }
+): string {
+  const state = db();
+  const existing = input.id ? state.categories.find((c) => c.id === input.id) : undefined;
+
+  if (existing) {
+    Object.assign(existing, input);
+    return existing.id;
+  }
+
+  const categoryId = `cat-${Math.random().toString(36).slice(2, 10)}`;
+  state.categories.push({
+    id: categoryId,
+    company_id: companyId,
+    name: input.name ?? '',
+    description: input.description ?? null,
+    staff_display_name: input.staff_display_name ?? null,
+    handy_bg_color: input.handy_bg_color ?? null,
+    kds_color: input.kds_color ?? null,
+    display_order: input.display_order ?? (state.categories.length + 1) * 10,
+    is_active: input.is_active ?? true,
+  });
+
+  return categoryId;
+}
+
+export function deleteCategory(categoryId: string): void {
+  const state = db();
+  state.categories = state.categories.filter((c) => c.id !== categoryId);
+  state.categoryMenus = state.categoryMenus.filter((l) => l.category_id !== categoryId);
+}
+
+export function setCategoryMenus(categoryId: string, menuIds: string[]): void {
+  const state = db();
+  state.categoryMenus = state.categoryMenus.filter((l) => l.category_id !== categoryId);
+  for (const menuId of menuIds) {
+    state.categoryMenus.push({ category_id: categoryId, menu_id: menuId });
+  }
+}
+
+/** カテゴリ 1 件と、そこに入っているメニュー ID */
+export function getCategoryDetail(categoryId: string) {
+  const state = db();
+  const category = state.categories.find((c) => c.id === categoryId);
+  if (!category) return null;
+
+  return {
+    category: clone(category),
+    menuIds: state.categoryMenus.filter((l) => l.category_id === categoryId).map((l) => l.menu_id),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// オプションの編集（仕様書 §5.5）
+// ---------------------------------------------------------------------------
+
+/** オプション本体と選択肢をまとめて保存する。選択肢は毎回入れ直す */
+export function saveOption(
+  companyId: string,
+  input: Partial<OptionDef> & { id?: string },
+  choices: Choice[]
+): string {
+  const state = db();
+  const existing = input.id ? state.options.find((o) => o.id === input.id) : undefined;
+  let optionId: string;
+
+  if (existing) {
+    Object.assign(existing, input);
+    optionId = existing.id;
+  } else {
+    optionId = `opt-${Math.random().toString(36).slice(2, 10)}`;
+    state.options.push({
+      id: optionId,
+      company_id: companyId,
+      name: input.name ?? '',
+      receipt_display_name: input.receipt_display_name ?? null,
+      min_choice: input.min_choice ?? 0,
+      max_choice: input.max_choice ?? 1,
+      display_order: input.display_order ?? (state.options.length + 1) * 10,
+    });
+  }
+
+  state.choices = state.choices.filter((c) => c.option_id !== optionId);
+  state.choices.push(
+    ...choices.map((choice, index) => ({
+      ...choice,
+      id: choice.id.startsWith('tmp-')
+        ? `choice-${Math.random().toString(36).slice(2, 10)}`
+        : choice.id,
+      option_id: optionId,
+      display_order: (index + 1) * 10,
+    }))
+  );
+
+  return optionId;
+}
+
+export function deleteOption(optionId: string): void {
+  const state = db();
+  state.options = state.options.filter((o) => o.id !== optionId);
+  state.choices = state.choices.filter((c) => c.option_id !== optionId);
+  state.menuOptions = state.menuOptions.filter((l) => l.option_id !== optionId);
+}
+
+export function setOptionMenus(optionId: string, menuIds: string[]): void {
+  const state = db();
+  state.menuOptions = state.menuOptions.filter((l) => l.option_id !== optionId);
+  for (const menuId of menuIds) {
+    state.menuOptions.push({ menu_id: menuId, option_id: optionId });
+  }
 }
