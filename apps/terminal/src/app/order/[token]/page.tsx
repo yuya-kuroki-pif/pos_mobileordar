@@ -9,11 +9,15 @@ import {
   getStoreById,
   getTableByToken,
 } from '@/lib/queries';
+import { getMemberSummary, getZaloConnectSettings, recordCheckin } from '@/lib/guestCustomer';
 import { GUEST_LOCALE_PARAM, isGuestLocale } from '@/lib/guestLocale';
+import { getGuestSession, hasSkippedConnect } from '@/lib/guestSession';
 import { isDemoMode, isSupabaseConfigured } from '@/lib/supabase';
+import { zaloOaUrl } from '@/lib/zalo';
 
 import { MobileOrder } from './MobileOrder';
 import { Welcome } from './Welcome';
+import { ZaloConnect } from './ZaloConnect';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +63,31 @@ export default async function OrderPage({
 
   const session = await getOpenSessionForTable(table.id);
 
+  // Zalo 連携（案A）。まだ誰だか分からないお客様には、注文の前に一度だけお願いする
+  const zalo = await getZaloConnectSettings(store.company_id);
+  const guest = await getGuestSession();
+
+  if (zalo.login_mode !== 'off' && !guest && !(await hasSkippedConnect(token))) {
+    return (
+      <ZaloConnect
+        token={token}
+        storeName={store.name}
+        locale={locale}
+        mode={zalo.login_mode}
+        headline={zalo.headline}
+        rewardText={zalo.reward_text}
+        oaUrl={zaloOaUrl(zalo.oa_id)}
+      />
+    );
+  }
+
+  // すでに分かっているお客様なら、この卓の来店として数えておく
+  if (guest && session) {
+    await recordCheckin({ customerId: guest.customerId, shopId: store.id, sessionId: session.id });
+  }
+
+  const member = guest ? await getMemberSummary(guest.customerId) : null;
+
   // まだ卓が開いていなければ、人数を聞く画面を出す
   if (!session) {
     return <Welcome token={token} storeName={store.name} tableName={table.name} seats={table.seats} note={store.opening_note} />;
@@ -82,6 +111,15 @@ export default async function OrderPage({
       initialTotal={total}
       initialStatus={session.status}
       locale={locale}
+      member={
+        member
+          ? {
+              displayName: member.displayName,
+              visitCount: member.visitCount,
+              rankName: member.rankName,
+            }
+          : null
+      }
     />
   );
 }

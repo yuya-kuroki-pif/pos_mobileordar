@@ -35,6 +35,7 @@ export function MobileOrder({
   initialTotal,
   initialStatus,
   locale,
+  member,
 }: {
   token: string;
   storeName: string;
@@ -46,6 +47,8 @@ export function MobileOrder({
   initialTotal: SessionTotal;
   initialStatus: SessionStatus;
   locale: GuestLocale;
+  /** Zalo で連携済みのお客様。未連携なら null */
+  member: { displayName: string | null; visitCount: number; rankName: string | null } | null;
 }) {
   const cart = useCart();
   const t = makeGuestTranslator(locale);
@@ -80,21 +83,36 @@ export function MobileOrder({
             <p className="truncate font-bold">{storeName}</p>
             <p className="text-xs text-charcoal-400">{tableName}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <LanguagePicker current={locale} />
+          <LanguagePicker current={locale} />
+        </div>
 
-            <div className="no-select flex rounded-xl bg-charcoal-100 p-1">
-              <HeaderTab active={view === 'menu'} onClick={() => setView('menu')}>
-                {t('メニュー')}
-              </HeaderTab>
-              <HeaderTab active={view === 'history'} onClick={() => setView('history')}>
-                {t('注文履歴')}
-                {activeItems.length > 0 && ` (${activeItems.length})`}
-              </HeaderTab>
-            </div>
-          </div>
+        {/* 幅の狭い端末でも潰れないよう、タブは次の行に置いて横いっぱいに使う */}
+        <div className="no-select mt-2 flex rounded-xl bg-charcoal-100 p-1">
+          <HeaderTab active={view === 'menu'} onClick={() => setView('menu')}>
+            {t('メニュー')}
+          </HeaderTab>
+          <HeaderTab active={view === 'history'} onClick={() => setView('history')}>
+            {t('注文履歴')}
+            {activeItems.length > 0 && ` (${activeItems.length})`}
+          </HeaderTab>
         </div>
       </header>
+
+      {/* Zalo で連携済みのお客様には、来店回数とランクを見せる */}
+      {member && (
+        <div className="flex items-center justify-between gap-3 bg-charcoal-900 px-4 py-2 text-xs text-white">
+          <span className="truncate">
+            {member.displayName
+              ? `${member.displayName} ${t('様')}`
+              : t('ご来店ありがとうございます')}
+          </span>
+          <span className="shrink-0 text-charcoal-300">
+            {member.rankName && <span className="mr-2 text-ember-300">{t(member.rankName)}</span>}
+            {t('ご来店')} {member.visitCount}
+            {t('回目')}
+          </span>
+        </div>
+      )}
 
       {!mobileOrderOpen && (
         <p className="bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -206,7 +224,7 @@ function HeaderTab({
     <button
       type="button"
       onClick={onClick}
-      className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${
+      className={`flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold transition-colors ${
         active ? 'bg-white text-charcoal-900 shadow-sm' : 'text-charcoal-500'
       }`}
     >

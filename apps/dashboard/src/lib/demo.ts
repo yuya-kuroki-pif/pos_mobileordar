@@ -52,6 +52,7 @@ import type {
   ShopMenu,
   Vendor,
   TerminalPaymentMethod,
+  ZaloConnectSettings,
 } from './types';
 
 /**
@@ -62,6 +63,7 @@ import type {
 const CORP_ID = 'corp-demo';
 
 export interface DemoState extends PlanState, TransactionState, CrmState, ExtrasState {
+  zaloConnectSettings: ZaloConnectSettings | null;
   corporation: Corporation;
   companies: Company[];
   shops: Shop[];
@@ -444,6 +446,7 @@ function createState(): DemoState {
     ...crm,
     ...extras,
     lineReportingBotConfigs: [],
+    zaloConnectSettings: null,
     ...buildBiSeeds(
       CORP_ID,
       shops.map((s) => s.id)
@@ -499,7 +502,7 @@ function createState(): DemoState {
 // HMR でモジュールが作り直されてもデータが消えないよう globalThis に置く。
 // ただし DemoState の形を変えたときは作り直したいので、版を添えて持つ。
 // （版を上げ忘れると、古い形のまま参照して実行時エラーになる）
-const STATE_VERSION = 22;
+const STATE_VERSION = 23;
 
 const g = globalThis as typeof globalThis & {
   __dashboardDemo?: { version: number; state: DemoState };

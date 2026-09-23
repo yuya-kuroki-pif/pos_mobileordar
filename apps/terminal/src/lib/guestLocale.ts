@@ -22,6 +22,30 @@ export function isGuestLocale(value: string | undefined | null): value is GuestL
 /** 画面の固定文言。訳が無ければ日本語 */
 const STRINGS: Record<Exclude<GuestLocale, 'ja'>, Record<string, string>> = {
   vi: {
+    // --- Zalo 連携 ---
+    'Zalo でつながる': 'Kết nối với Zalo',
+    'お得な情報をお届けします': 'Nhận ưu đãi dành riêng cho bạn',
+    'フォローすると特典がもらえます': 'Theo dõi để nhận ưu đãi',
+    'キャンペーンやクーポンの案内を受け取る': 'Tôi đồng ý nhận thông tin khuyến mãi và phiếu giảm giá',
+    'いつでも受信を止められます': 'Bạn có thể hủy nhận bất cứ lúc nào',
+    'あとで': 'Để sau',
+    'このまま注文する': 'Tiếp tục đặt món',
+    'ご来店ありがとうございます': 'Cảm ơn bạn đã ghé thăm',
+    '会員ランク': 'Hạng thành viên',
+    'ご来店': 'Số lần ghé thăm',
+    '回目': ' lần',
+    'Zalo と連携しました': 'Đã kết nối Zalo',
+    '連携できませんでした。そのままご注文いただけます。':
+      'Không thể kết nối. Bạn vẫn có thể đặt món.',
+    'Zalo 連携はまだ準備中です。そのままご注文いただけます。':
+      'Kết nối Zalo đang được chuẩn bị. Bạn vẫn có thể đặt món.',
+    'Zalo 公式アカウントをフォロー': 'Theo dõi Zalo Official Account',
+    '様': '',
+    // 会員ランク
+    レギュラー: 'Thường',
+    シルバー: 'Bạc',
+    ゴールド: 'Vàng',
+    プラチナ: 'Bạch kim',
     メニュー: 'Thực đơn',
     注文履歴: 'Lịch sử gọi món',
     カート: 'Giỏ hàng',
@@ -47,6 +71,30 @@ const STRINGS: Record<Exclude<GuestLocale, 'ja'>, Record<string, string>> = {
     まだ注文がありません: 'Chưa có món nào được gọi',
   },
   en: {
+    // --- Zalo 連携 ---
+    'Zalo でつながる': 'Connect with Zalo',
+    'お得な情報をお届けします': 'Get offers made for you',
+    'フォローすると特典がもらえます': 'Follow us for a reward',
+    'キャンペーンやクーポンの案内を受け取る': 'Send me offers and coupons',
+    'いつでも受信を止められます': 'You can unsubscribe at any time',
+    'あとで': 'Later',
+    'このまま注文する': 'Continue to order',
+    'ご来店ありがとうございます': 'Thanks for visiting',
+    '会員ランク': 'Membership',
+    'ご来店': 'Visits',
+    '回目': '',
+    'Zalo と連携しました': 'Connected to Zalo',
+    '連携できませんでした。そのままご注文いただけます。':
+      'We could not connect. You can still order.',
+    'Zalo 連携はまだ準備中です。そのままご注文いただけます。':
+      'Zalo connect is not set up yet. You can still order.',
+    'Zalo 公式アカウントをフォロー': 'Follow our Zalo Official Account',
+    '様': '',
+    // 会員ランク
+    レギュラー: 'Regular',
+    シルバー: 'Silver',
+    ゴールド: 'Gold',
+    プラチナ: 'Platinum',
     メニュー: 'Menu',
     注文履歴: 'Order history',
     カート: 'Cart',

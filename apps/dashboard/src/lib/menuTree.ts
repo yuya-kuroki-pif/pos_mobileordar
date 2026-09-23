@@ -132,6 +132,7 @@ export const POS_MENU: MenuGroup[] = [
       { key: 'membership', label: '会員ランク管理', href: '/membershipCard/rankConfig', feature: 'crm' },
       { key: 'coupon-presets', label: 'クーポン自動配信', href: '/crm/couponPresets', feature: 'crm' },
       { key: 'messaging-accounts', label: '配信アカウント（LINE / Zalo）', href: '/messagingAccounts', feature: 'crm' },
+      { key: 'zalo-connect', label: 'Zalo ログイン連携', href: '/zaloConnect', feature: 'crm' },
       { key: 'mo-questionnaire', label: 'アンケート設定', href: '/questionnaire', feature: 'crm' },
     ],
   },

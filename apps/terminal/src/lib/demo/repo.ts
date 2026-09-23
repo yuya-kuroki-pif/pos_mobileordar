@@ -1122,3 +1122,99 @@ export function getShopPaymentMethods(): ShopPaymentMethod[] {
     { id: 'pm-gift', name: '商品券', kind: 'gift_certificate', display_order: 60 },
   ];
 }
+
+// ---------------------------------------------------------------------------
+// Zalo ログイン連携（案A）のデモ実装。
+// Zalo のアプリが無くても導線を確かめられるよう、承認をその場で通したことにする。
+// ---------------------------------------------------------------------------
+
+interface DemoCustomer {
+  id: string;
+  zalo_user_id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  visit_count: number;
+  rank_name: string | null;
+  marketing_consent: boolean;
+  visits: string[];
+}
+
+function guestState(): { customers: DemoCustomer[] } {
+  const g = globalThis as unknown as { __moGuests?: { customers: DemoCustomer[] } };
+  if (!g.__moGuests) g.__moGuests = { customers: [] };
+  return g.__moGuests;
+}
+
+export function getZaloConnectSettings() {
+  return {
+    app_id: null,
+    oa_id: 'demo-oa',
+    login_mode: 'optional' as const,
+    follow_coupon_id: null,
+    headline: null,
+    reward_text: 'ドリンク 1 杯サービス',
+  };
+}
+
+export function linkZaloCustomer(input: {
+  zaloUserId: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  marketingConsent: boolean;
+}) {
+  const state = guestState();
+  let customer = state.customers.find((c) => c.zalo_user_id === input.zaloUserId);
+
+  if (!customer) {
+    customer = {
+      id: `guest-${state.customers.length + 1}`,
+      zalo_user_id: input.zaloUserId,
+      display_name: input.displayName,
+      avatar_url: input.avatarUrl,
+      visit_count: 0,
+      rank_name: null,
+      marketing_consent: input.marketingConsent,
+      visits: [],
+    };
+    state.customers.push(customer);
+  } else {
+    customer.display_name = input.displayName ?? customer.display_name;
+    customer.avatar_url = input.avatarUrl;
+    if (input.marketingConsent) customer.marketing_consent = true;
+  }
+
+  return {
+    id: customer.id,
+    displayName: customer.display_name,
+    visitCount: customer.visit_count,
+    rankName: customer.rank_name,
+  };
+}
+
+export function recordCheckin(input: { customerId: string; sessionId: string }) {
+  const customer = guestState().customers.find((c) => c.id === input.customerId);
+  if (!customer || customer.visits.includes(input.sessionId)) return;
+
+  customer.visits.push(input.sessionId);
+  customer.visit_count += 1;
+  // 来店回数に応じたランク（ダッシュボードの会員ランク設定と同じ区切り）
+  customer.rank_name =
+    customer.visit_count >= 13
+      ? 'プラチナ'
+      : customer.visit_count >= 7
+        ? 'ゴールド'
+        : customer.visit_count >= 3
+          ? 'シルバー'
+          : 'レギュラー';
+}
+
+export function getGuestCustomer(customerId: string) {
+  const customer = guestState().customers.find((c) => c.id === customerId);
+  if (!customer) return null;
+  return {
+    id: customer.id,
+    displayName: customer.display_name,
+    visitCount: customer.visit_count,
+    rankName: customer.rank_name,
+  };
+}

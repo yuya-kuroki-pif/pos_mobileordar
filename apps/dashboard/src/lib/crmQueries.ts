@@ -13,6 +13,7 @@ import type {
   MiniGame,
   QuestionnaireAnswer,
   ShopQuestionnaireSetting,
+  ZaloConnectSettings,
 } from './types';
 
 /** CRM の読み取り（仕様書 §5.29〜§5.32） */
@@ -166,4 +167,28 @@ export async function getShopQuestionnaireSettings(
 
   const rows = (data ?? []) as ShopQuestionnaireSetting[];
   return shopIds.map((id) => rows.find((r) => r.shop_id === id) ?? fallback(id));
+}
+
+/** Zalo ログイン連携の設定（案A）。未設定なら既定値を返す */
+export async function getZaloConnectSettings(companyId: string): Promise<ZaloConnectSettings> {
+  const fallback: ZaloConnectSettings = {
+    company_id: companyId,
+    app_id: null,
+    oa_id: null,
+    login_mode: 'optional',
+    follow_coupon_id: null,
+    headline: null,
+    updated_at: null,
+  };
+
+  if (isDemoMode()) return clone(db().zaloConnectSettings ?? fallback);
+
+  const { data, error } = await supabaseAdmin()
+    .from('zalo_connect_settings')
+    .select('*')
+    .eq('company_id', companyId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return (data as ZaloConnectSettings | null) ?? fallback;
 }

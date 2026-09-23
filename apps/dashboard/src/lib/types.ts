@@ -1263,3 +1263,22 @@ export const ACCOUNT_ACTION_LABELS: Record<string, string> = {
   shop_update: '店舗設定の変更',
   export: 'CSV ダウンロード',
 };
+
+/** Zalo ログイン連携の出し方（§案A） */
+export type ZaloLoginMode = 'off' | 'optional' | 'required';
+
+export const ZALO_LOGIN_MODE_LABELS: Record<ZaloLoginMode, string> = {
+  off: '出さない',
+  optional: '出す（スキップ可）',
+  required: '連携しないと注文できない',
+};
+
+export interface ZaloConnectSettings {
+  company_id: string;
+  app_id: string | null;
+  oa_id: string | null;
+  login_mode: ZaloLoginMode;
+  follow_coupon_id: string | null;
+  headline: string | null;
+  updated_at: string | null;
+}
