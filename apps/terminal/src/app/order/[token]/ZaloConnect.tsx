@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 
+import { LanguagePicker } from '@/components/LanguagePicker';
 import { makeGuestTranslator, type GuestLocale } from '@/lib/guestLocale';
 
 import { skipZaloConnect } from './actions';
@@ -44,6 +45,10 @@ export function ZaloConnect({
 
   return (
     <main className="flex min-h-screen flex-col bg-charcoal-900 px-6 py-10 text-white">
+      <div className="flex justify-end">
+        <LanguagePicker current={locale} tone="dark" />
+      </div>
+
       <div className="flex flex-1 flex-col items-center justify-center text-center">
         <p className="text-sm text-charcoal-300">{storeName}</p>
 

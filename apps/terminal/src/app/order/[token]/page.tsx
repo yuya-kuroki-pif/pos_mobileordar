@@ -90,7 +90,16 @@ export default async function OrderPage({
 
   // まだ卓が開いていなければ、人数を聞く画面を出す
   if (!session) {
-    return <Welcome token={token} storeName={store.name} tableName={table.name} seats={table.seats} note={store.opening_note} />;
+    return (
+      <Welcome
+        token={token}
+        storeName={store.name}
+        tableName={table.name}
+        seats={table.seats}
+        note={store.opening_note}
+        locale={locale}
+      />
+    );
   }
 
   const [menu, items, total] = await Promise.all([

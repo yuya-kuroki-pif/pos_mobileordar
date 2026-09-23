@@ -4,7 +4,8 @@ import { useMemo, useRef, useState, useTransition } from 'react';
 
 import { OptionDialog } from '@/components/OptionDialog';
 import { placeMobileOrder, requestBill } from '@/lib/actions/order';
-import { GUEST_LOCALES, makeGuestTranslator, type GuestLocale } from '@/lib/guestLocale';
+import { LanguagePicker } from '@/components/LanguagePicker';
+import { makeGuestTranslator, type GuestLocale } from '@/lib/guestLocale';
 import { ORDER_ITEM_STATUS_LABEL, formatTime, formatYen } from '@/lib/format';
 import type {
   CategoryWithItems,
@@ -65,7 +66,7 @@ export function MobileOrder({
   );
 
   // 会計が済むとセッションが閉じ、API が session: null を返すようになる
-  if (data.session === null) return <ThankYou storeName={storeName} />;
+  if (data.session === null) return <ThankYou storeName={storeName} locale={locale} />;
 
   const billRequested = data.session.status === 'bill_requested';
   const activeItems = data.items.filter((item) => item.status !== 'cancelled');
@@ -116,13 +117,13 @@ export function MobileOrder({
 
       {!mobileOrderOpen && (
         <p className="bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          ただいまモバイルからのご注文を停止しています。店員にお声がけください。
+          {t('ただいまモバイルからのご注文を停止しています。店員にお声がけください。')}
         </p>
       )}
 
       {billRequested && (
         <p className="bg-ember-50 px-4 py-3 text-sm font-semibold text-ember-700">
-          お会計を承りました。店員がお伺いします。
+          {t('お会計を承りました。店員がお伺いします。')}
         </p>
       )}
 
@@ -130,10 +131,11 @@ export function MobileOrder({
         <MenuView
           menu={menu}
           disabled={!mobileOrderOpen}
+          locale={locale}
           onPick={(item) => {
             if (item.option_groups.length === 0) {
               cart.add(buildCartLine(item, [], 1));
-              showToast(`${item.name} をカートに追加しました`);
+              showToast(`${item.name}${t('をカートに追加しました')}`);
             } else {
               setDialogItem(item);
             }
@@ -177,9 +179,10 @@ export function MobileOrder({
           item={dialogItem}
           onAdd={(line) => {
             cart.add(line);
-            showToast(`${line.name} をカートに追加しました`);
+            showToast(`${line.name}${t('をカートに追加しました')}`);
           }}
           onClose={() => setDialogItem(null)}
+          locale={locale}
         />
       )}
 
@@ -240,12 +243,15 @@ function HeaderTab({
 function MenuView({
   menu,
   disabled,
+  locale,
   onPick,
 }: {
   menu: CategoryWithItems[];
   disabled: boolean;
+  locale: GuestLocale;
   onPick: (item: MenuItemWithOptions) => void;
 }) {
+  const t = makeGuestTranslator(locale);
   const [active, setActive] = useState(menu[0]?.id ?? '');
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
@@ -309,7 +315,7 @@ function MenuView({
                     </p>
                     {item.is_sold_out && (
                       <span className="mt-1 inline-block rounded bg-charcoal-200 px-1.5 py-0.5 text-[11px] font-bold text-charcoal-600">
-                        本日売切
+                        {t('本日売切')}
                       </span>
                     )}
                   </div>
@@ -326,7 +332,7 @@ function MenuView({
               </li>
             ))}
             {category.items.length === 0 && (
-              <li className="py-6 text-sm text-charcoal-400">準備中です</li>
+              <li className="py-6 text-sm text-charcoal-400">{t('準備中です')}</li>
             )}
           </ul>
         </section>
@@ -369,14 +375,14 @@ function HistoryView({
     startTransition(async () => {
       const result = await requestBill(token);
       if (result.ok) onRequested();
-      else setError(result.error ?? 'エラーが発生しました。');
+      else setError(result.error ?? t('エラーが発生しました。'));
     });
   }
 
   return (
     <div className="px-4 pt-6">
       {active.length === 0 ? (
-        <p className="py-16 text-center text-charcoal-400">まだご注文はありません</p>
+        <p className="py-16 text-center text-charcoal-400">{t('まだご注文はありません')}</p>
       ) : (
         <ul className="divide-y divide-charcoal-100">
           {active.map((item) => (
@@ -389,7 +395,7 @@ function HistoryView({
                   </p>
                 )}
                 <div className="mt-1 flex items-center gap-2">
-                  <StatusPill status={item.status} />
+                  <StatusPill status={item.status} locale={locale} />
                   <span className="text-[11px] text-charcoal-400">
                     {formatTime(item.created_at)}
                   </span>
@@ -409,17 +415,17 @@ function HistoryView({
       {total && active.length > 0 && (
         <div className="mt-6 rounded-2xl bg-charcoal-50 p-5">
           <div className="flex justify-between text-sm">
-            <span>小計</span>
+            <span>{t('小計')}</span>
             <span className="tabular font-semibold">{formatYen(total.subtotal)}</span>
           </div>
           {total.service_charge > 0 && (
             <div className="flex justify-between text-sm">
-              <span>サービス料</span>
+              <span>{t('サービス料')}</span>
               <span className="tabular font-semibold">{formatYen(total.service_charge)}</span>
             </div>
           )}
           <div className="flex justify-between text-xs text-charcoal-400">
-            <span>{taxIncluded ? '（内 消費税）' : '消費税'}</span>
+            <span>{taxIncluded ? t('（内 消費税）') : t('消費税')}</span>
             <span className="tabular">{formatYen(total.tax)}</span>
           </div>
           <div className="mt-2 flex items-baseline justify-between border-t border-charcoal-200 pt-2">
@@ -427,7 +433,7 @@ function HistoryView({
             <span className="tabular text-2xl font-bold">{formatYen(total.total)}</span>
           </div>
           <p className="mt-2 text-[11px] text-charcoal-400">
-            お会計はレジまたは店員がお席でご案内します。
+            {t('お会計はレジまたは店員がお席でご案内します。')}
           </p>
         </div>
       )}
@@ -455,7 +461,14 @@ function HistoryView({
   );
 }
 
-function StatusPill({ status }: { status: OrderItem['status'] }) {
+function StatusPill({
+  status,
+  locale,
+}: {
+  status: OrderItem['status'];
+  locale: GuestLocale;
+}) {
+  const t = makeGuestTranslator(locale);
   const tone = {
     pending: 'bg-amber-100 text-amber-800',
     cooking: 'bg-sky-100 text-sky-800',
@@ -465,7 +478,7 @@ function StatusPill({ status }: { status: OrderItem['status'] }) {
   }[status];
 
   // 客には「調理中」「お持ちしました」くらいの粒度で伝わればよい
-  const label = status === 'ready' ? 'まもなく提供' : ORDER_ITEM_STATUS_LABEL[status];
+  const label = t(status === 'ready' ? 'まもなく提供' : ORDER_ITEM_STATUS_LABEL[status]);
 
   return (
     <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${tone}`}>{label}</span>
@@ -507,7 +520,7 @@ function CartSheet({
       );
 
       if (!result.ok) {
-        setError(result.error ?? '注文できませんでした。');
+        setError(result.error ?? t('注文できませんでした。'));
         return;
       }
       cart.clear();
@@ -528,7 +541,7 @@ function CartSheet({
             onClick={onClose}
             className="rounded-lg px-3 py-1 text-sm font-semibold text-charcoal-500"
           >
-            閉じる
+            {t('閉じる')}
           </button>
         </div>
 
@@ -555,7 +568,7 @@ function CartSheet({
                   type="button"
                   onClick={() => cart.setQuantity(line.key, line.quantity - 1)}
                   className="h-9 w-9 rounded-full bg-charcoal-100 text-lg font-bold active:bg-charcoal-200"
-                  aria-label="数量を減らす"
+                  aria-label={t('数量を減らす')}
                 >
                   −
                 </button>
@@ -564,7 +577,7 @@ function CartSheet({
                   type="button"
                   onClick={() => cart.setQuantity(line.key, line.quantity + 1)}
                   className="h-9 w-9 rounded-full bg-charcoal-100 text-lg font-bold active:bg-charcoal-200"
-                  aria-label="数量を増やす"
+                  aria-label={t('数量を増やす')}
                 >
                   ＋
                 </button>
@@ -573,7 +586,7 @@ function CartSheet({
           ))}
 
           {cart.lines.length === 0 && (
-            <li className="py-16 text-center text-charcoal-400">カートは空です</li>
+            <li className="py-16 text-center text-charcoal-400">{t('カートは空です')}</li>
           )}
         </ul>
 
@@ -585,7 +598,7 @@ function CartSheet({
 
         <div className="border-t border-charcoal-100 px-5 py-4">
           <div className="mb-3 flex items-baseline justify-between">
-            <span className="font-semibold">小計</span>
+            <span className="font-semibold">{t('小計')}</span>
             <span className="tabular text-2xl font-bold">{formatYen(cart.total)}</span>
           </div>
           <button
@@ -595,10 +608,10 @@ function CartSheet({
             className="w-full rounded-2xl bg-ember-600 py-4 text-lg font-bold text-white
               transition-colors active:bg-ember-800 disabled:bg-charcoal-200 disabled:text-charcoal-400"
           >
-            {pending ? '送信中…' : '注文を確定する'}
+            {pending ? t('送信中…') : t('注文を確定する')}
           </button>
           <p className="mt-2 text-center text-[11px] text-charcoal-400">
-            確定後のキャンセルは店員にお申し付けください
+            {t('確定後のキャンセルは店員にお申し付けください')}
           </p>
         </div>
       </div>
@@ -606,44 +619,19 @@ function CartSheet({
   );
 }
 
-function ThankYou({ storeName }: { storeName: string }) {
+function ThankYou({ storeName, locale }: { storeName: string; locale: GuestLocale }) {
+  const t = makeGuestTranslator(locale);
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-charcoal-900 px-6 text-center text-white">
-      <h1 className="text-2xl font-bold">ありがとうございました</h1>
+      <h1 className="text-2xl font-bold">{t('ありがとうございました')}</h1>
       <p className="mt-3 text-charcoal-300">
         {storeName}
         <br />
-        またのご来店をお待ちしております。
+        {t('またのご来店をお待ちしております。')}
       </p>
     </main>
   );
 }
 
 
-/**
- * 言語の切り替え（日本語 / ベトナム語 / 英語）。
- * URL のクエリを差し替えるだけなので、同じ卓のまま言語だけ変わる。
- */
-function LanguagePicker({ current }: { current: GuestLocale }) {
-  return (
-    <div className="no-select flex rounded-xl bg-charcoal-100 p-1 text-xs">
-      {GUEST_LOCALES.map((item) => {
-        const active = item.value === current;
-        return (
-          <a
-            key={item.value}
-            href={`?lang=${item.value}`}
-            aria-current={active ? 'true' : undefined}
-            className={
-              active
-                ? 'rounded-lg bg-white px-2 py-1 font-bold text-charcoal-900 shadow-sm'
-                : 'rounded-lg px-2 py-1 text-charcoal-400'
-            }
-          >
-            {item.label}
-          </a>
-        );
-      })}
-    </div>
-  );
-}

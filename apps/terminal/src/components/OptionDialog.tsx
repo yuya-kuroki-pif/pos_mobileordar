@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 
 import { formatYen } from '@/lib/format';
+import { makeGuestTranslator, type GuestLocale } from '@/lib/guestLocale';
 import type { CartLine, MenuItemWithOptions } from '@/lib/types';
 import { buildCartLine, isSelectionValid, toggleOption } from '@/lib/useCart';
 
@@ -18,13 +19,17 @@ export function OptionDialog({
   onAdd,
   onClose,
   allowNote = true,
+  locale = 'ja',
 }: {
   item: MenuItemWithOptions;
   onAdd: (line: CartLine) => void;
   onClose: () => void;
   /** POS では店員が備考を入れたい場面が多い。客向けでも要望欄として使う */
   allowNote?: boolean;
+  /** お客様の画面で使うときに渡す。POS（スタッフ）は日本語のまま */
+  locale?: GuestLocale;
 }) {
+  const t = makeGuestTranslator(locale);
   const [selected, setSelected] = useState<string[]>(() =>
     // 必須グループは先頭の選択肢を初期選択にして、迷わず進めるようにする
     item.option_groups.flatMap((group) =>
@@ -68,16 +73,16 @@ export function OptionDialog({
                   <span className="font-bold text-charcoal-800">{group.name}</span>
                   {group.min_choice > 0 ? (
                     <span className="rounded bg-ember-100 px-1.5 py-0.5 text-[11px] font-bold text-ember-700">
-                      必須
+                      {t('必須')}
                     </span>
                   ) : (
                     <span className="rounded bg-charcoal-100 px-1.5 py-0.5 text-[11px] font-semibold text-charcoal-500">
-                      任意
+                      {t('任意')}
                     </span>
                   )}
                   {group.max_choice > 1 && (
                     <span className="text-xs text-charcoal-400">
-                      {chosen}/{group.max_choice} 選択
+                      {chosen}/{group.max_choice} {t('選択')}
                     </span>
                   )}
                 </legend>
@@ -119,12 +124,12 @@ export function OptionDialog({
 
           {allowNote && (
             <label className="block">
-              <span className="mb-1 block text-sm font-bold text-charcoal-800">備考</span>
+              <span className="mb-1 block text-sm font-bold text-charcoal-800">{t('備考')}</span>
               <input
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={100}
-                placeholder="例：わさび抜き"
+                placeholder={t('例：わさび抜き')}
                 className="w-full rounded-xl border border-charcoal-200 px-3 py-2.5 outline-none
                   focus:border-ember-400 focus:ring-2 focus:ring-ember-100"
               />
@@ -138,7 +143,7 @@ export function OptionDialog({
               type="button"
               onClick={() => setQuantity((q) => Math.max(1, q - 1))}
               className="h-11 w-11 rounded-full bg-charcoal-100 text-2xl font-bold text-charcoal-700 active:bg-charcoal-200"
-              aria-label="数量を減らす"
+              aria-label={t('数量を減らす')}
             >
               −
             </button>
@@ -147,7 +152,7 @@ export function OptionDialog({
               type="button"
               onClick={() => setQuantity((q) => Math.min(99, q + 1))}
               className="h-11 w-11 rounded-full bg-charcoal-100 text-2xl font-bold text-charcoal-700 active:bg-charcoal-200"
-              aria-label="数量を増やす"
+              aria-label={t('数量を増やす')}
             >
               ＋
             </button>
@@ -164,8 +169,8 @@ export function OptionDialog({
               transition-colors active:bg-ember-800 disabled:bg-charcoal-200 disabled:text-charcoal-400"
           >
             {valid
-              ? `カートに追加  ${formatYen((item.price + line.options_price) * quantity)}`
-              : '必須の選択があります'}
+              ? `${t('カートに追加')}  ${formatYen((item.price + line.options_price) * quantity)}`
+              : t('必須の選択があります')}
           </button>
         </div>
       </div>

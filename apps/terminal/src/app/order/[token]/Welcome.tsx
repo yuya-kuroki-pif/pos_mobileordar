@@ -3,7 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
+import { LanguagePicker } from '@/components/LanguagePicker';
 import { startSession } from '@/lib/actions/order';
+import { makeGuestTranslator, type GuestLocale } from '@/lib/guestLocale';
 
 /**
  * QR を読み込んだ直後の画面。
@@ -15,13 +17,16 @@ export function Welcome({
   tableName,
   seats,
   note,
+  locale,
 }: {
   token: string;
   storeName: string;
   tableName: string;
   seats: number;
   note: string | null;
+  locale: GuestLocale;
 }) {
+  const t = makeGuestTranslator(locale);
   const router = useRouter();
   const [count, setCount] = useState(2);
   const [error, setError] = useState<string | null>(null);
@@ -34,18 +39,23 @@ export function Welcome({
     startTransition(async () => {
       const result = await startSession(token, count);
       if (result.ok) router.refresh();
-      else setError(result.error ?? 'エラーが発生しました。店員にお声がけください。');
+      else setError(result.error ?? t('エラーが発生しました。店員にお声がけください。'));
     });
   }
 
   return (
     <main className="flex min-h-screen flex-col bg-charcoal-900 px-5 py-10 text-white">
       <div className="mx-auto w-full max-w-md">
+        <div className="mb-5 flex justify-end">
+          <LanguagePicker current={locale} tone="dark" />
+        </div>
+
         <p className="text-sm text-charcoal-400">{tableName}</p>
         <h1 className="mt-1 text-3xl font-bold">{storeName}</h1>
         <p className="mt-4 text-charcoal-300">
-          ご来店ありがとうございます。<br />
-          人数を選んで注文をはじめてください。
+          {t('ご来店ありがとうございます。')}
+          <br />
+          {t('人数を選んで注文をはじめてください。')}
         </p>
 
         {note && (
@@ -82,11 +92,11 @@ export function Welcome({
           className="mt-8 w-full rounded-2xl bg-ember-500 py-4 text-lg font-bold text-white
             transition-colors active:bg-ember-700 disabled:opacity-60"
         >
-          {pending ? '準備中…' : `${count}名で注文をはじめる`}
+          {pending ? t('準備中…') : `${count}${t('名で注文をはじめる')}`}
         </button>
 
         <p className="mt-6 text-center text-xs text-charcoal-500">
-          人数の変更やご不明な点は店員にお申し付けください
+          {t('人数の変更やご不明な点は店員にお申し付けください')}
         </p>
       </div>
     </main>
