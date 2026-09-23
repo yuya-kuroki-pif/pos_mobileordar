@@ -18,6 +18,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
+import { ImageUpload } from '@/components/ImageUpload';
 import { saveMenuAction, type MenuFormInput } from '@/lib/actions/menu';
 import type { CategoryRow, MenuDetail } from '@/lib/types';
 
@@ -41,6 +42,7 @@ export function MenuBasicForm({
   const [pending, startTransition] = useTransition();
 
   const menu = detail?.menu;
+  const [imageUrl, setImageUrl] = useState<string | null>(menu?.image_url ?? null);
 
   function submit() {
     setError(null);
@@ -65,6 +67,7 @@ export function MenuBasicForm({
           is_notice_only: values.is_notice_only ?? false,
           reduced_rate_eligible: values.reduced_rate_eligible ?? true,
           display_order: values.display_order ?? 0,
+          image_url: imageUrl,
           categoryIds: values.categoryIds ?? [],
         };
 
@@ -178,12 +181,17 @@ export function MenuBasicForm({
           />
         </Form.Item>
 
-        <Alert
-          type="info"
-          showIcon
-          message="商品画像のアップロードは未実装です"
-          description="Supabase Storage への画像・動画アップロードは、ストレージの設定と合わせて実装します。"
-        />
+        <Form.Item label="商品画像">
+          <ImageUpload
+            value={imageUrl}
+            onChange={setImageUrl}
+            folder="menu"
+            width={216}
+            height={144}
+            hint="モバイルオーダーとハンディに出ます。5MB まで"
+            disabled={!editable}
+          />
+        </Form.Item>
       </Card>
 
       <Card title="販売価格と原価" style={{ marginTop: 16 }}>

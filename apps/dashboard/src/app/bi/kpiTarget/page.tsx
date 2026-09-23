@@ -1,3 +1,4 @@
+import { isAiConfigured } from '@/lib/anthropic';
 import { requireSession } from '@/lib/auth';
 import { getDailySummaries, monthRange } from '@/lib/analyticsQueries';
 import { getDailyTargetRows, getKpiTargets } from '@/lib/biQueries';
@@ -49,6 +50,7 @@ export default async function KpiTargetPage({
       lastMonthSales={lastMonth.reduce((sum, d) => sum + d.sales, 0)}
       companyName={companyName}
       editable={canEdit(session.permissions, 'target_management')}
+      aiReady={isAiConfigured()}
     />
   );
 }

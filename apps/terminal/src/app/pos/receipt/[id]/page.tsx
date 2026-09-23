@@ -9,7 +9,13 @@ import {
   formatTaxRate,
   formatYen,
 } from '@/lib/format';
-import { getPaymentById, getSession, getSessionItems, getTables } from '@/lib/queries';
+import {
+  getPaymentById,
+  getSession,
+  getSessionItems,
+  getShopPaymentMethods,
+  getTables,
+} from '@/lib/queries';
 
 import { ReceiptActions } from './ReceiptActions';
 
@@ -23,11 +29,18 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
   const payment = await getPaymentById(id, store.id);
   if (!payment) notFound();
 
-  const [session, items, tables] = await Promise.all([
+  const [session, items, tables, paymentMethods] = await Promise.all([
     getSession(payment.session_id),
     getSessionItems(payment.session_id),
     getTables(store.id),
+    getShopPaymentMethods(store.company_id),
   ]);
+
+  // レシートにはお客様が選んだ支払方法の名前を出す。
+  // マスターに無い（古い会計など）ときだけ、区分の名前で代用する
+  const methodLabel =
+    paymentMethods.find((row) => row.id === payment.payment_method_id)?.name ??
+    PAYMENT_METHOD_LABEL[payment.method];
 
   const table = tables.find((t) => t.id === session?.table_id);
 
@@ -134,7 +147,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
             </div>
 
             <div className="mt-2 border-t border-dashed border-charcoal-200 pt-2">
-              <ReceiptRow label="支払方法" value={PAYMENT_METHOD_LABEL[payment.method]} />
+              <ReceiptRow label="支払方法" value={methodLabel} />
               {payment.method === 'cash' && (
                 <>
                   <ReceiptRow label="お預かり" value={formatYen(payment.received)} />

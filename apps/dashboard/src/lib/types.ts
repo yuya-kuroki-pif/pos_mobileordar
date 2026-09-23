@@ -697,6 +697,18 @@ export interface OrderItemRecord {
   tax_rate: number;
   line_total: number;
   status: string;
+  /** 注文時に選ばれたオプション（§6.5 のオプション別分析に使う） */
+  options_snapshot: OrderItemOption[];
+  /** KDS の打刻（§6.9）。KDS を使っていない店舗では null */
+  cooked_at: string | null;
+  picked_up_at: string | null;
+  served_at: string | null;
+}
+
+export interface OrderItemOption {
+  group: string;
+  name: string;
+  price_delta: number;
 }
 
 /** 会計。Phase A の payments をそのまま使う */
@@ -1133,3 +1145,121 @@ export interface ShopQuestionnaireSetting {
   menu_review_enabled: boolean;
   staff_review_enabled: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// 残りの画面ぶん（§5.31 カスタムアンケート / §5.32 配信・クーポン分析 / §7.2 クチコミ）
+// ---------------------------------------------------------------------------
+
+export type QuestionType = 'score' | 'choice' | 'multi_choice' | 'text';
+
+export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
+  score: '5段階評価',
+  choice: '単一選択',
+  multi_choice: '複数選択',
+  text: '自由記述',
+};
+
+export interface Questionnaire {
+  id: string;
+  company_id: string;
+  kind: 'line' | 'mobile_order';
+  name: string;
+  image_url: string | null;
+  reward_coupon_id: string | null;
+}
+
+/** カスタム設問はこの数まで（§5.31） */
+export const MAX_CUSTOM_QUESTIONS = 5;
+
+export interface QuestionnaireQuestion {
+  id: string;
+  questionnaire_id: string;
+  text: string;
+  type: QuestionType;
+  options: string[];
+  is_custom: boolean;
+  display_order: number;
+}
+
+/** 1 回ぶんの配信実績。来店につながったかまで持つ */
+export interface DeliveryJob {
+  id: string;
+  delivery_id: string;
+  shop_id: string | null;
+  sent_at: string;
+  sent_count: number;
+  opened_count: number;
+  visited_count: number;
+  visited_group_count: number;
+  effect_sales: number;
+}
+
+export interface CustomerCoupon {
+  id: string;
+  coupon_id: string;
+  customer_id: string;
+  issued_at: string;
+  used_at: string | null;
+  used_shop_id: string | null;
+  effect_sales: number;
+}
+
+export interface GoogleBusinessProfile {
+  shop_id: string;
+  location_id: string | null;
+  account_name: string | null;
+  is_connected: boolean;
+  synced_at: string | null;
+}
+
+export interface GoogleReview {
+  id: string;
+  shop_id: string;
+  review_id: string | null;
+  author_name: string | null;
+  rating: number;
+  comment: string | null;
+  posted_at: string;
+  reply_text: string | null;
+  replied_at: string | null;
+}
+
+export interface CustomReport {
+  id: string;
+  corporation_id: string;
+  name: string;
+  owner_account_id: string | null;
+  owner_name: string | null;
+  share_scope: 'private' | 'corporation';
+  definition: {
+    source: 'sales' | 'menu' | 'survey';
+    metrics: string[];
+    group_by: string;
+    shop_ids: string[];
+  };
+  updated_at: string;
+}
+
+/** §8.8 アカウントの操作ログ。POS の監査ログ（audit_logs）とは別物 */
+export interface AccountAuditLog {
+  id: string;
+  corporation_id: string;
+  account_id: string | null;
+  account_name: string | null;
+  action: string;
+  target: string | null;
+  occurred_at: string;
+  ip: string | null;
+}
+
+export const ACCOUNT_ACTION_LABELS: Record<string, string> = {
+  login: 'ログイン',
+  logout: 'ログアウト',
+  account_invite: 'アカウント招待',
+  account_update: 'アカウント編集',
+  account_disable: 'アカウント無効化',
+  role_update: '権限設定の変更',
+  menu_update: 'メニュー編集',
+  shop_update: '店舗設定の変更',
+  export: 'CSV ダウンロード',
+};

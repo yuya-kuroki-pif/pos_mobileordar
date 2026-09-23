@@ -391,6 +391,7 @@ export function createDemoState(): DemoState {
       store_id: STORE_ID,
       session_id: session.id,
       method,
+      payment_method_id: null,
       subtotal,
       discount: 0,
       service_charge: 0,

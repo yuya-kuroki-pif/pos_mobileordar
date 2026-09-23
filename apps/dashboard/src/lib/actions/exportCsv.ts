@@ -2,6 +2,7 @@
 
 import { requireSession } from '../auth';
 import { db } from '../demo';
+import type { ExportKind } from '../exportDefs';
 import { isDemoMode, supabaseAdmin } from '../supabase';
 
 /**
@@ -10,27 +11,6 @@ import { isDemoMode, supabaseAdmin } from '../supabase';
  * 指示書は非同期ジョブにして完了後にダウンロードさせる形だが、まずは
  * その場で組み立てて返す。件数が増えて待たされるようになったら切り替える。
  */
-
-export type ExportKind =
-  | 'summaryByShops'
-  | 'summary'
-  | 'orders'
-  | 'orderSummary'
-  | 'payments'
-  | 'discounts'
-  | 'customerSource'
-  | 'audit';
-
-export const EXPORT_LABELS: Record<ExportKind, string> = {
-  summaryByShops: '日計（日別・店舗統一） summaryByShops.csv',
-  summary: '日計（日別） summary.csv',
-  orders: '注文一覧 orders.csv',
-  orderSummary: '出数集計 orderSummary.csv',
-  payments: '支払一覧 payments.csv',
-  discounts: '値引・割引一覧 discounts.csv',
-  customerSource: '媒体集計 customerSource.csv',
-  audit: '監査 audit.csv',
-};
 
 function toCsv(header: string[], rows: (string | number)[][]): string {
   const escape = (value: string | number) => {

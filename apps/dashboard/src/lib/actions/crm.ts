@@ -35,6 +35,7 @@ export interface CouponInput {
   content: string;
   description: string;
   terms: string;
+  image_url: string | null;
   starts_at: string | null;
   ends_at: string | null;
   valid_days: number | null;
@@ -56,6 +57,7 @@ export async function saveCouponAction(input: CouponInput): Promise<ActionResult
       content: input.content.trim() || null,
       description: input.description.trim() || null,
       terms: input.terms.trim() || null,
+      image_url: input.image_url,
       starts_at: input.starts_at,
       ends_at: input.ends_at,
       valid_days: input.valid_days,
@@ -72,7 +74,6 @@ export async function saveCouponAction(input: CouponInput): Promise<ActionResult
         state.coupons.push({
           id,
           company_id: companyId,
-          image_url: null,
           discount_type_id: null,
           menu_id: null,
           ...payload,

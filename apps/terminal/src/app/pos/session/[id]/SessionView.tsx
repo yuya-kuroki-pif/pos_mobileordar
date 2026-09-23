@@ -29,6 +29,7 @@ import type {
   SessionTotal,
   Store,
   TableSession,
+  ShopPaymentMethod,
 } from '@/lib/types';
 import { buildCartLine, lineTotal, useCart } from '@/lib/useCart';
 import { useLiveData } from '@/lib/useLiveData';
@@ -61,6 +62,7 @@ export function SessionView({
   initialTotal,
   menu,
   store,
+  paymentMethods,
   emptyTables,
   otherSessions,
   readOnly,
@@ -72,6 +74,7 @@ export function SessionView({
   initialTotal: SessionTotal;
   menu: CategoryWithItems[];
   store: Store;
+  paymentMethods: ShopPaymentMethod[];
   emptyTables: TableOption[];
   otherSessions: SessionOption[];
   readOnly: boolean;
@@ -150,6 +153,7 @@ export function SessionView({
           sessionId={sessionId}
           store={store}
           unpaidItems={unpaidItems}
+          paymentMethods={paymentMethods}
           onClose={() => setCheckingOut(false)}
           onPartialPaid={refresh}
         />

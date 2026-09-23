@@ -1,7 +1,7 @@
 'use client';
 
 import { DownloadOutlined } from '@ant-design/icons';
-import { Button, Card, Col, DatePicker, Radio, Row, Statistic, Table, Tag } from 'antd';
+import { Button, Card, Col, DatePicker, Radio, Row, Statistic, Tag } from 'antd';
 import dayjs from 'dayjs';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 
 import { PageHeader } from '@/components/PageHeader';
+import { PlTreeTable, type PlTableNode } from '@/components/PlTreeTable';
 import { CHART_COLORS } from '@/styles/theme';
 
 const yen = new Intl.NumberFormat('ja-JP');
@@ -42,10 +43,14 @@ export function MonthlyPlView({
   yearMonth,
   rows,
   companyName,
+  plNodes,
+  plColumns,
 }: {
   yearMonth: string;
   rows: PlRow[];
   companyName: string;
+  plNodes: PlTableNode[];
+  plColumns: { key: string; label: string }[];
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<'amount' | 'ratio'>('amount');
@@ -208,83 +213,12 @@ export function MonthlyPlView({
         </ResponsiveContainer>
       </Card>
 
-      <Card title="損益計算書" styles={{ body: { padding: 0 } }}>
-        <Table<PlRow>
-          rowKey="shop_id"
-          dataSource={rows}
-          size="middle"
-          scroll={{ x: 'max-content' }}
-          pagination={false}
-          columns={[
-            { title: '店舗', dataIndex: 'shop_name', width: 200, fixed: 'left' },
-            {
-              title: '売上',
-              dataIndex: 'sales',
-              width: 140,
-              align: 'right',
-              render: (value: number) => <span className="tabular">¥{yen.format(value)}</span>,
-            },
-            {
-              title: '売上目標',
-              dataIndex: 'sales_target',
-              width: 140,
-              align: 'right',
-              render: (value: number) => <span className="tabular">¥{yen.format(value)}</span>,
-            },
-            {
-              title: '達成率',
-              key: 'rate',
-              width: 100,
-              align: 'right',
-              render: (_, row) =>
-                row.sales_target > 0 ? (
-                  <Tag color={row.sales >= row.sales_target ? 'green' : 'red'} className="tabular">
-                    {((row.sales / row.sales_target) * 100).toFixed(1)}%
-                  </Tag>
-                ) : (
-                  <span style={{ color: '#bfbfbf' }}>—</span>
-                ),
-            },
-            {
-              title: '売上原価',
-              key: 'cost',
-              width: 140,
-              align: 'right',
-              render: (_, row) => (
-                <span className="tabular">¥{yen.format(row.food_cost + row.drink_cost)}</span>
-              ),
-            },
-            {
-              title: '人件費',
-              dataIndex: 'labor',
-              width: 140,
-              align: 'right',
-              render: (value: number) => <span className="tabular">¥{yen.format(value)}</span>,
-            },
-            {
-              title: '販売管理費',
-              dataIndex: 'sga',
-              width: 140,
-              align: 'right',
-              render: (value: number) => <span className="tabular">¥{yen.format(value)}</span>,
-            },
-            {
-              title: '営業利益',
-              key: 'profit',
-              width: 150,
-              align: 'right',
-              render: (_, row) => {
-                const value = row.sales - row.food_cost - row.drink_cost - row.labor - row.sga;
-                return (
-                  <span className="tabular" style={{ color: value < 0 ? '#f5222d' : undefined }}>
-                    ¥{yen.format(value)}
-                  </span>
-                );
-              },
-            },
-          ]}
-        />
-      </Card>
+      <PlTreeTable
+        title="損益計算書"
+        nodes={plNodes}
+        columns={plColumns}
+        csvName={`monthlyPl_${yearMonth}.csv`}
+      />
     </>
   );
 }

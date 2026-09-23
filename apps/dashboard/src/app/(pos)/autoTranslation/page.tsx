@@ -1,3 +1,4 @@
+import { isAiConfigured } from '@/lib/anthropic';
 import { requireSession } from '@/lib/auth';
 import { getAutoTranslationSetting } from '@/lib/companyQueries';
 import { canEdit } from '@/lib/permissions';
@@ -20,6 +21,7 @@ export default async function AutoTranslationPage() {
       setting={setting}
       companyName={companyName}
       editable={canEdit(session.permissions, 'company_management')}
+      aiReady={isAiConfigured()}
     />
   );
 }

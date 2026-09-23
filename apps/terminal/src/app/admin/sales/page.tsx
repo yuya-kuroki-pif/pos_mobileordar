@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { Card, Empty, PageHeader, Stat } from '@/components/ui';
 import { requireStore } from '@/lib/auth';
+import { getShopPaymentMethods } from '@/lib/queries';
 import {
   businessDate,
   formatBusinessDate,
@@ -37,6 +38,10 @@ export default async function SalesPage({
   const today = businessDate(new Date(), store.timezone, store.business_day_cutoff_hour);
   const to = isYmd(params.to) ? params.to : today;
   const from = isYmd(params.from) ? params.from : shiftDays(to, -29);
+
+  const methods = await getShopPaymentMethods(store.company_id);
+  const methodName = (id: string | null, fallback: string) =>
+    methods.find((row) => row.id === id)?.name ?? fallback;
 
   const [summary, ranking, payments] = await Promise.all([
     getSalesSummary(store.id, from, to),
@@ -188,7 +193,8 @@ export default async function SalesPage({
                       )}
                     </p>
                     <p className="text-xs text-charcoal-400">
-                      {formatDateTime(payment.paid_at)} ・ {PAYMENT_METHOD_LABEL[payment.method]}
+                      {formatDateTime(payment.paid_at)} ・{' '}
+                      {methodName(payment.payment_method_id, PAYMENT_METHOD_LABEL[payment.method])}
                       {payment.discount > 0 && ` ・ 割引 ${formatYen(payment.discount)}`}
                     </p>
                   </div>

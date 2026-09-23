@@ -1,8 +1,12 @@
 'use client';
 
-import { Alert, App, Button, Card, Form, Space, Switch, Typography } from 'antd';
+import { TranslationOutlined } from '@ant-design/icons';
+import { Alert, App, Button, Card, Checkbox, Form, Space, Switch, Typography } from 'antd';
+
 import { useRouter } from 'next/navigation';
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
+
+import { translateMenusAction } from '@/lib/actions/translate';
 
 import { PageHeader } from '@/components/PageHeader';
 import { saveAutoTranslationAction } from '@/lib/actions/companySettings';
@@ -21,15 +25,36 @@ export function AutoTranslationForm({
   setting,
   companyName,
   editable,
+  aiReady,
 }: {
   setting: AutoTranslationSetting;
   companyName: string;
   editable: boolean;
+  aiReady: boolean;
 }) {
   const router = useRouter();
   const { message } = App.useApp();
   const [form] = Form.useForm();
   const [pending, startTransition] = useTransition();
+
+  const [runTargets, setRunTargets] = useState<('menu' | 'category' | 'option')[]>(['menu']);
+  const [translating, setTranslating] = useState(false);
+  const [translateNote, setTranslateNote] = useState<string | null>(null);
+
+  function runTranslate() {
+    setTranslating(true);
+    setTranslateNote(null);
+    startTransition(async () => {
+      const result = await translateMenusAction(runTargets);
+      setTranslating(false);
+      if (!result.ok) {
+        message.error(result.error ?? '翻訳できませんでした');
+        return;
+      }
+      setTranslateNote(`${result.filled ?? 0} 件のメニューに訳を入れました。`);
+      router.refresh();
+    });
+  }
 
   function submit() {
     form.validateFields().then((values) => {
@@ -90,12 +115,50 @@ export function AutoTranslationForm({
           ))}
         </Card>
 
+        <Card title="いますぐ翻訳する" style={{ marginTop: 16 }}>
+          {aiReady ? (
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Typography.Text type="secondary">
+                訳が空いている項目だけを埋めます。手で入れた訳は上書きしません。
+              </Typography.Text>
+              <Space wrap>
+                <Checkbox.Group
+                  value={runTargets}
+                  onChange={(value) => setRunTargets(value as typeof runTargets)}
+                  options={[
+                    { value: 'menu', label: 'メニュー' },
+                    { value: 'category', label: 'カテゴリ' },
+                    { value: 'option', label: 'オプション' },
+                  ]}
+                  disabled={!editable}
+                />
+                <Button
+                  icon={<TranslationOutlined />}
+                  onClick={runTranslate}
+                  loading={translating}
+                  disabled={!editable || runTargets.length === 0}
+                >
+                  翻訳する
+                </Button>
+              </Space>
+              {translateNote && <Alert type="success" showIcon message={translateNote} />}
+            </Space>
+          ) : (
+            <Alert
+              type="warning"
+              showIcon
+              message="AI の接続先が未設定です"
+              description="ANTHROPIC_API_KEY を .env.local に設定すると、この画面から翻訳をまとめて作れます。設定は今でも保存できます。"
+            />
+          )}
+        </Card>
+
         <Alert
-          type="warning"
+          type="info"
           showIcon
           style={{ marginTop: 16 }}
-          message="翻訳エンジンの接続は未実装です"
-          description="ここでの設定は保存されますが、実際に文章を翻訳するバッチ（DeepL / Gemini）はまだ動いていません。"
+          message="毎朝の自動実行はまだ動いていません"
+          description="上のスイッチは設定として保存されますが、定時に走らせる仕組み（cron）はこれからです。いまは「翻訳する」を押したときだけ動きます。"
         />
 
         <div style={{ marginTop: 16, textAlign: 'right' }}>

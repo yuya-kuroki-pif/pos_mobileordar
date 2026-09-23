@@ -1,5 +1,6 @@
 import { Card, Empty, PageHeader, Stat } from '@/components/ui';
 import { requireStore } from '@/lib/auth';
+import { getShopPaymentMethods } from '@/lib/queries';
 import {
   businessDate,
   formatBusinessDate,
@@ -19,6 +20,10 @@ export default async function AdminHome() {
   const from = new Date(today);
   from.setDate(from.getDate() - 6);
   const fromYmd = from.toISOString().slice(0, 10);
+
+  const methods = await getShopPaymentMethods(store.company_id);
+  const methodName = (id: string | null, fallback: string) =>
+    methods.find((row) => row.id === id)?.name ?? fallback;
 
   const [summary, ranking, payments, floor] = await Promise.all([
     getSalesSummary(store.id, fromYmd, today),
@@ -142,7 +147,7 @@ export default async function AdminHome() {
                     </p>
                     <p className="text-xs text-charcoal-400">
                       {formatDateTime(payment.paid_at)} ・{' '}
-                      {PAYMENT_METHOD_LABEL[payment.method]}
+                      {methodName(payment.payment_method_id, PAYMENT_METHOD_LABEL[payment.method])}
                     </p>
                   </div>
                   <span className="tabular font-semibold">{formatYen(payment.total)}</span>

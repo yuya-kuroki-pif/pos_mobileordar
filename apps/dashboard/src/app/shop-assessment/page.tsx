@@ -1,12 +1,16 @@
-import { Alert, Card, Col, Progress, Row, Statistic } from 'antd';
+import { Card, Col, Progress, Row, Statistic } from 'antd';
 
 import { DataTable, TableNote, type DataRow } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
+import type { AssessmentInput } from '@/lib/actions/assessment';
 import { getShopSummaries, monthRange } from '@/lib/analyticsQueries';
+import { isAiConfigured } from '@/lib/anthropic';
 import { requireSession } from '@/lib/auth';
 import { getKpiTargets } from '@/lib/biQueries';
 import { getQuestionnaireAnswers } from '@/lib/crmQueries';
 import { scoreByShop } from '@/lib/surveyAnalytics';
+
+import { AssessmentComments } from './AssessmentComments';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'AI 店舗診断' };
@@ -14,8 +18,8 @@ export const metadata = { title: 'AI 店舗診断' };
 /**
  * AI 店舗診断（仕様書 §7.1）。
  *
- * 指示書は LLM でコメントを作る想定だが、まずは数字の並びと
- * 「どこが強くてどこが弱いか」を機械的に出すところまで。
+ * 数字の並びは常に出し、診断コメントは AI が設定されていれば
+ * ボタンを押したときだけ生成する。未設定でも機械的な一文は出る。
  */
 export default async function ShopAssessmentPage({
   searchParams,
@@ -76,6 +80,20 @@ export default async function ShopAssessmentPage({
   const companyName =
     session.companies.find((c) => c.id === session.currentCompanyId)?.name ?? '業態';
 
+  // AI に渡す数字。画面に出しているものと同じ
+  const assessmentInputs: AssessmentInput[] = rows.map((row) => ({
+    name: String(row.name),
+    sales: Number(row.sales),
+    sales_rate: Number(row.sales_rate),
+    guests: Number(row.guests),
+    avg_spend: Number(row.avg_spend),
+    revisit: Number(row.revisit),
+    service: Number(row.service),
+    food: Number(row.food),
+    speed: Number(row.speed),
+    clean: Number(row.clean),
+  }));
+
   /** 一番よい指標と一番わるい指標を拾って、一言にする */
   function comment(row: DataRow): string {
     const items = [
@@ -108,14 +126,6 @@ export default async function ShopAssessmentPage({
         title="AI 店舗診断"
         description="売上とアンケートを並べて、店舗ごとの強みと弱みを見ます"
         breadcrumb={[{ label: companyName }, { label: 'AI' }, { label: '店舗診断' }]}
-      />
-
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-        message="コメントは数字から機械的に作っています"
-        description="いまは一番よい指標と一番わるい指標を拾って一文にしています。文章を生成する仕組み（LLM）との接続はこれからです。"
       />
 
       <Row gutter={16} style={{ marginBottom: 16 }}>
@@ -155,14 +165,12 @@ export default async function ShopAssessmentPage({
         ]}
       />
 
-      <Card title="診断コメント" style={{ marginTop: 16 }}>
-        {rows.map((row) => (
-          <div key={String(row.key)} style={{ marginBottom: 12 }}>
-            <strong>{String(row.name)}</strong>
-            <div style={{ color: '#595959', fontSize: 13 }}>{comment(row)}</div>
-          </div>
-        ))}
-      </Card>
+      <AssessmentComments
+        shops={assessmentInputs}
+        fallback={Object.fromEntries(rows.map((row) => [String(row.name), comment(row)]))}
+        yearMonth={yearMonth}
+        aiReady={isAiConfigured()}
+      />
 
       <TableNote>点数はアンケートの 5 段階を 100 点換算にしたものです。</TableNote>
     </>

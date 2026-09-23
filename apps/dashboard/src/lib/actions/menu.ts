@@ -46,6 +46,7 @@ export interface MenuFormInput {
   is_notice_only: boolean;
   reduced_rate_eligible: boolean;
   display_order: number;
+  image_url: string | null;
   categoryIds: string[];
 }
 
@@ -75,6 +76,7 @@ export async function saveMenuAction(input: MenuFormInput): Promise<ActionResult
       is_notice_only: input.is_notice_only,
       reduced_rate_eligible: input.reduced_rate_eligible,
       display_order: input.display_order,
+      image_url: input.image_url,
     };
 
     let menuId = input.id;

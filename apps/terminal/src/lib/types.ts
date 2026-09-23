@@ -193,6 +193,8 @@ export interface Payment {
   store_id: string;
   session_id: string;
   method: PaymentMethod;
+  /** 会計時に選ばれた支払方法マスターの行。未選択なら null */
+  payment_method_id: string | null;
   subtotal: number;
   discount: number;
   service_charge: number;
@@ -309,3 +311,37 @@ export interface CartLine {
   options_price: number;
   note: string;
 }
+
+/** 支払方法マスターの種別（ダッシュボード §5.10） */
+export type PaymentKind =
+  | 'cash'
+  | 'mobile'
+  | 'credit'
+  | 'point'
+  | 'qr'
+  | 'e_money'
+  | 'credit_sale'
+  | 'gift_certificate';
+
+/** 支払方法マスターの 1 行。店舗ごとに並べ替えて会計画面に出す */
+export interface ShopPaymentMethod {
+  id: string;
+  name: string;
+  kind: PaymentKind;
+  display_order: number;
+}
+
+/**
+ * マスターの種別を、会計に記録する enum に寄せる。
+ * 帳票と既存の集計は payments.method を見ているので、必ずどれかに落とす。
+ */
+export const KIND_TO_METHOD: Record<PaymentKind, PaymentMethod> = {
+  cash: 'cash',
+  credit: 'card',
+  qr: 'qr',
+  e_money: 'e_money',
+  mobile: 'other',
+  point: 'other',
+  credit_sale: 'other',
+  gift_certificate: 'other',
+};

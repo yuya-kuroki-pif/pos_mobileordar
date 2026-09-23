@@ -1,4 +1,5 @@
 import { requireSession } from '@/lib/auth';
+import { canEdit } from '@/lib/permissions';
 import { getTerminalPayments } from '@/lib/transactionQueries';
 
 import { TerminalPaymentView } from './TerminalPaymentView';
@@ -28,6 +29,7 @@ export default async function TerminalPaymentPage({
       shops={shops}
       shopId={currentShop?.id}
       companyName={companyName}
+      editable={canEdit(session.permissions, 'cashless')}
     />
   );
 }

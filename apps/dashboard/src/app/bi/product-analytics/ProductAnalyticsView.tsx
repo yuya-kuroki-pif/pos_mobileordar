@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
 import { ABC_COLORS } from '@/styles/theme';
+import type { OptionSummary } from '@/lib/analyticsQueries';
 import type { MenuSummary, ProductType, Shop } from '@/lib/types';
 
 const yen = new Intl.NumberFormat('ja-JP');
@@ -33,19 +34,21 @@ interface AbcRow extends MenuSummary {
  */
 export function ProductAnalyticsView({
   menus,
+  options,
   shops,
   shopId,
   yearMonth,
   companyName,
 }: {
   menus: MenuSummary[];
+  options: OptionSummary[];
   shops: Shop[];
   shopId?: string;
   yearMonth: string;
   companyName: string;
 }) {
   const router = useRouter();
-  const [granularity, setGranularity] = useState<'menu' | 'category' | 'type'>('menu');
+  const [granularity, setGranularity] = useState<'menu' | 'category' | 'type' | 'option'>('menu');
 
   function go(next: { shop?: string; month?: string }) {
     const params = new URLSearchParams();
@@ -56,12 +59,26 @@ export function ProductAnalyticsView({
   }
 
   const rows = useMemo<AbcRow[]>(() => {
-    // 粒度に応じてまとめ直す
+    // 粒度に応じてまとめ直す。オプション別だけ元データが違うので先に形を揃える
+    const source: MenuSummary[] =
+      granularity === 'option'
+        ? options.map((option) => ({
+            menu_id: option.key,
+            name: `${option.group} / ${option.name}`,
+            category_name: option.group,
+            menu_type: 'other' as const,
+            unit_price: option.qty === 0 ? 0 : Math.round(option.sales / option.qty),
+            qty: option.qty,
+            sales: option.sales,
+            gross_profit: option.sales,
+          }))
+        : menus;
+
     const grouped = new Map<string, MenuSummary>();
 
-    for (const menu of menus) {
+    for (const menu of source) {
       const key =
-        granularity === 'menu'
+        granularity === 'menu' || granularity === 'option'
           ? (menu.menu_id ?? menu.name)
           : granularity === 'category'
             ? (menu.category_name ?? '未設定')
@@ -72,7 +89,7 @@ export function ProductAnalyticsView({
         ({
           ...menu,
           name:
-            granularity === 'menu'
+            granularity === 'menu' || granularity === 'option'
               ? menu.name
               : granularity === 'category'
                 ? (menu.category_name ?? '未設定')
@@ -107,7 +124,7 @@ export function ProductAnalyticsView({
         profitShare: totalProfit > 0 ? row.gross_profit / totalProfit : 0,
       };
     });
-  }, [menus, granularity]);
+  }, [menus, options, granularity]);
 
   function downloadCsv() {
     const header = ['順位', '商品名', '単価', '出数', '出数構成比', '売上', '売上構成比', 'ランク'];
@@ -189,6 +206,7 @@ export function ProductAnalyticsView({
             { key: 'menu', label: '商品別' },
             { key: 'category', label: 'カテゴリ別' },
             { key: 'type', label: 'メニュータイプ別' },
+            { key: 'option', label: 'オプション別' },
           ]}
         />
 

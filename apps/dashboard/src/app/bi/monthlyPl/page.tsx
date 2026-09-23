@@ -1,6 +1,7 @@
 import { requireSession } from '@/lib/auth';
 import { getShopSummaries, monthRange } from '@/lib/analyticsQueries';
 import { getKpiTargets, getPurchases } from '@/lib/biQueries';
+import { loadPlTree } from '@/lib/plPage';
 
 import { MonthlyPlView } from './MonthlyPlView';
 
@@ -22,10 +23,18 @@ export default async function MonthlyPlPage({
   const shops = session.shops.filter((s) => s.company_id === session.currentCompanyId);
   const shopIds = shops.map((s) => s.id);
 
-  const [summaries, targets, purchases] = await Promise.all([
+  // 損益計算書は店舗を列にした科目ツリー（§6.2）
+  const plColumns = shops.map((shop) => ({ key: shop.id, label: shop.name }));
+
+  const [summaries, targets, purchases, plTree] = await Promise.all([
     getShopSummaries(shopIds, range),
     getKpiTargets(shopIds, yearMonth),
     getPurchases(shopIds, range.from, range.to),
+    loadPlTree({
+      corporationId: session.corporation.id,
+      columns: plColumns,
+      slices: shops.map((shop) => ({ column: shop.id, shopIds: [shop.id], range })),
+    }),
   ]);
 
   const companyName =
@@ -58,6 +67,8 @@ export default async function MonthlyPlPage({
         };
       })}
       companyName={companyName}
+      plNodes={plTree.nodes}
+      plColumns={plColumns}
     />
   );
 }

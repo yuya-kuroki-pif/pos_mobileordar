@@ -11,6 +11,7 @@ import {
   getSessionItems,
   getSessionOrders,
   getSessionTotal,
+  getShopPaymentMethods,
   getTables,
 } from '@/lib/queries';
 
@@ -26,13 +27,14 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const session = await getSession(id);
   if (!session || session.store_id !== store.id) notFound();
 
-  const [tables, items, orders, total, menu, floor] = await Promise.all([
+  const [tables, items, orders, total, menu, floor, paymentMethods] = await Promise.all([
     getTables(store.id),
     getSessionItems(id),
     getSessionOrders(id),
     getSessionTotal(id),
     getMenuTree(store.id, true),
     getFloorMap(store.id),
+    getShopPaymentMethods(store.company_id),
   ]);
 
   const table = tables.find((t) => t.id === session.table_id);
@@ -86,6 +88,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         initialTotal={total}
         menu={menu}
         store={store}
+        paymentMethods={paymentMethods}
         emptyTables={emptyTables.map((t) => ({ id: t.id, name: t.name, area: t.area }))}
         otherSessions={otherSessions}
         readOnly={closed}

@@ -1,11 +1,11 @@
-import { Alert, Card, Space, Typography } from 'antd';
-import Image from 'next/image';
+import { Alert } from 'antd';
 
 import { PageHeader } from '@/components/PageHeader';
+import { ShopPicker } from '@/components/ShopPicker';
 import { requireSession } from '@/lib/auth';
 import { qrDataUrl } from '@/lib/tableQueries';
 
-import { ShopPicker } from './ShopPicker';
+import { PreviewCard } from './PreviewCard';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'アプリ表示確認' };
@@ -45,18 +45,7 @@ export default async function PreviewUserAppPage({
         description="モバイルオーダー側で「注文できない閲覧モード」を実装したら、この QR から開けるようにします。いまの見え方を確かめたい場合は、テーブル画面の QR から実際の卓を開いてください。"
       />
 
-      <Card>
-        {currentShop ? (
-          <Space direction="vertical" align="center" style={{ width: '100%' }}>
-            <Image src={image} alt="プレビュー用 QR コード" width={240} height={240} unoptimized />
-            <Typography.Text copyable={{ text: url }} type="secondary">
-              {url}
-            </Typography.Text>
-          </Space>
-        ) : (
-          <Typography.Text type="secondary">この業態には店舗がありません。</Typography.Text>
-        )}
-      </Card>
+      <PreviewCard image={currentShop ? image : null} url={currentShop ? url : null} />
     </>
   );
 }

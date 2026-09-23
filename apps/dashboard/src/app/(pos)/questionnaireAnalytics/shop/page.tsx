@@ -2,7 +2,7 @@ import { Card, Col, Progress, Row, Statistic } from 'antd';
 
 import { DataTable, TableNote, type DataRow } from '@/components/DataTable';
 import { PageHeader } from '@/components/PageHeader';
-import { ShopPicker } from '@/app/(pos)/previewUserApp/ShopPicker';
+import { ShopPicker } from '@/components/ShopPicker';
 import { requireSession } from '@/lib/auth';
 import { getQuestionnaireAnswers } from '@/lib/crmQueries';
 import { breakdown, scoreByShop } from '@/lib/surveyAnalytics';

@@ -6,7 +6,8 @@ import dayjs from 'dayjs';
 import { useState, useTransition } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
-import { EXPORT_LABELS, exportCsvAction, type ExportKind } from '@/lib/actions/exportCsv';
+import { exportCsvAction } from '@/lib/actions/exportCsv';
+import { EXPORT_LABELS, type ExportKind } from '@/lib/exportDefs';
 import type { Shop } from '@/lib/types';
 
 /** CSV ダウンロード（仕様書 §5.28） */

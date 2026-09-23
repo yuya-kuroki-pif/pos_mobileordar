@@ -225,17 +225,20 @@ export function buildCrm(
     lose_coupon_id: `${companyId}-coupon-1`,
   }));
 
-  // アンケートは店舗ごとに 40 件ずつ。店舗によって少し傾向を変える
+  // アンケートは店舗ごとに 6 ヶ月 × 20 件。
+  // スコア推移が読めるよう、月が進むにつれて少しずつ点が上がるようにしてある
+  const MONTHS = ['04', '05', '06', '07', '08', '09'];
   const questionnaireAnswers: QuestionnaireAnswer[] = shopIds.flatMap((shopId, shopIndex) =>
-    Array.from({ length: 40 }).map((_, i) => {
-      const base = 3.6 + shopIndex * 0.25;
+    MONTHS.flatMap((month, monthIndex) =>
+    Array.from({ length: 20 }).map((_, i) => {
+      const base = 3.4 + shopIndex * 0.25 + monthIndex * 0.06;
       const score = () => Math.max(1, Math.min(5, Math.round(base + (random() - 0.5) * 2)));
 
       return {
-        id: `${shopId}-q-${i}`,
+        id: `${shopId}-q-${month}-${i}`,
         shop_id: shopId,
         customer_id: `cust-${Math.floor(random() * customers.length)}`,
-        answered_at: `2026-09-${String(1 + Math.floor(random() * 18)).padStart(2, '0')}T21:00:00+09:00`,
+        answered_at: `2026-${month}-${String(1 + Math.floor(random() * 27)).padStart(2, '0')}T21:00:00+09:00`,
         revisit_score: score(),
         service_score: score(),
         food_score: score(),
@@ -247,6 +250,7 @@ export function buildCrm(
         awareness_channel: CHANNELS[Math.floor(random() * CHANNELS.length)],
       };
     })
+    )
   );
 
   const menuReviews: MenuReview[] = menuIds.flatMap((menuId) =>

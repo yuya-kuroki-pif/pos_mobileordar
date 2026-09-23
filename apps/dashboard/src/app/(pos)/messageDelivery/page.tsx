@@ -1,4 +1,5 @@
 import { requireSession } from '@/lib/auth';
+import { canEdit } from '@/lib/permissions';
 import { getMessagingAccounts, getMessageDeliveries } from '@/lib/crmQueries';
 
 import { MessageDeliveryView } from './MessageDeliveryView';
@@ -23,6 +24,7 @@ export default async function MessageDeliveryPage() {
       deliveries={deliveries}
       accounts={accounts}
       companyName={companyName}
+      editable={canEdit(session.permissions, 'crm')}
     />
   );
 }

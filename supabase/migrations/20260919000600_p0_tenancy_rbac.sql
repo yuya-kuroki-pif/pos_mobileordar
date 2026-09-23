@@ -166,9 +166,10 @@ begin
       'daily_closing','edit', 'accounting_history','edit', 'table_usage_history','edit',
       'payment_settings','edit', 'cashless','edit', 'recommendation_menu','edit',
       'monthly_pl_report','edit', 'pl_accounts','edit', 'income_expense','edit',
+      'attract_all','edit',
       'cost_display','view', 'labor_cost_parttime_display','view',
       'labor_cost_employee_display','view', 'audit_logs','view',
-      'account_audit_logs','none'
+      'account_audit_logs','view'
     ), 10),
     (p_corporation_id, 'pos', '業態管理者', true, jsonb_build_object(
       'account_management','view', 'bi_integration','view', 'menu_master','edit',
@@ -178,6 +179,7 @@ begin
       'daily_closing','edit', 'accounting_history','edit', 'table_usage_history','edit',
       'payment_settings','edit', 'cashless','none', 'recommendation_menu','edit',
       'monthly_pl_report','view', 'pl_accounts','view', 'income_expense','view',
+      'attract_all','edit',
       'cost_display','view', 'labor_cost_parttime_display','view',
       'labor_cost_employee_display','none', 'audit_logs','view',
       'account_audit_logs','none'
@@ -190,6 +192,7 @@ begin
       'daily_closing','view', 'accounting_history','view', 'table_usage_history','none',
       'payment_settings','none', 'cashless','none', 'recommendation_menu','view',
       'monthly_pl_report','view', 'pl_accounts','none', 'income_expense','view',
+      'attract_all','view',
       'cost_display','view', 'labor_cost_parttime_display','none',
       'labor_cost_employee_display','view', 'audit_logs','view',
       'account_audit_logs','none'

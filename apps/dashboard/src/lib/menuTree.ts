@@ -48,11 +48,11 @@ export const POS_MENU: MenuGroup[] = [
       { key: 'q-score', label: '店舗スコア一覧', href: '/questionnaireAnalytics/score', feature: 'questionnaire_analytics' },
       { key: 'q-comment', label: 'コメント一覧', href: '/questionnaireAnalytics/comment', feature: 'questionnaire_analytics' },
       { key: 'q-shop', label: '店舗詳細', href: '/questionnaireAnalytics/shop', feature: 'questionnaire_analytics' },
-      { key: 'q-changes', label: 'スコア推移', href: '/questionnaireAnalytics/scoreChanges', feature: 'questionnaire_analytics', pending: true },
-      { key: 'q-custom', label: 'カスタムアンケート', href: '/companyQuestionnaireExport', feature: 'questionnaire_analytics', pending: true },
+      { key: 'q-changes', label: 'スコア推移', href: '/questionnaireAnalytics/scoreChanges', feature: 'questionnaire_analytics' },
+      { key: 'q-custom', label: 'カスタムアンケート', href: '/companyQuestionnaireExport', feature: 'questionnaire_analytics' },
       { key: 'q-employee', label: 'スタッフ評価分析', href: '/employeeReviewAnalytics/ranking', feature: 'questionnaire_analytics' },
-      { key: 'q-delivery', label: 'メッセージ配信分析', href: '/messageDeliveryAnalytics', feature: 'crm', pending: true },
-      { key: 'q-coupon', label: 'クーポン利用分析', href: '/couponAnalytics', feature: 'crm', pending: true },
+      { key: 'q-delivery', label: 'メッセージ配信分析', href: '/messageDeliveryAnalytics', feature: 'crm' },
+      { key: 'q-coupon', label: 'クーポン利用分析', href: '/couponAnalytics', feature: 'crm' },
       { key: 'q-menu', label: 'メニュー評価分析', href: '/menuReviewAnalytics', feature: 'questionnaire_analytics' },
     ],
   },
@@ -61,7 +61,7 @@ export const POS_MENU: MenuGroup[] = [
     label: 'データ出力・連携',
     children: [
       { key: 'csv', label: 'CSVダウンロード', href: '/aggregatedData/daily/export', feature: 'analytics' },
-      { key: 'online-csv', label: 'モバイル決済取引CSV', href: '/onlinePaymentCsv/export', feature: 'cashless', pending: true },
+      { key: 'online-csv', label: 'モバイル決済取引CSV', href: '/onlinePaymentCsv/export', feature: 'cashless' },
     ],
   },
   {
@@ -73,6 +73,7 @@ export const POS_MENU: MenuGroup[] = [
       { key: 'table-usage', label: 'テーブル利用履歴', href: '/tableUsageHistory', feature: 'table_usage_history' },
       { key: 'audit', label: '重要操作履歴一覧', href: '/auditLogs', feature: 'audit_logs' },
       { key: 'terminal-payment', label: 'キャッシュレス決済履歴', href: '/terminalPayment/history', feature: 'cashless' },
+      { key: 'terminal-deposit', label: 'キャッシュレス入金履歴', href: '/terminalPayment/depositHistory', feature: 'cashless' },
       { key: 'line-report', label: 'レポートくん設定', href: '/lineReportingBotConfig/active', feature: 'analytics' },
     ],
   },
@@ -86,6 +87,7 @@ export const POS_MENU: MenuGroup[] = [
       { key: 'category', label: 'カテゴリ', href: '/category', feature: 'menu_master' },
       { key: 'recommend', label: 'おすすめメニュー', href: '/menuRecommendations', feature: 'recommendation_menu' },
       { key: 'menu-csv', label: 'メニュー一括編集', href: '/menuMasterCsv', feature: 'menu_master' },
+      { key: 'menu-assistant', label: 'メニューアシスタント', href: '/menuAssistant', feature: 'menu_master' },
     ],
   },
   {
@@ -110,6 +112,7 @@ export const POS_MENU: MenuGroup[] = [
       { key: 'role', label: 'キッチンプリンター一覧', href: '/role', feature: 'shop_management' },
       { key: 'clerk', label: '店員', href: '/clerk', feature: 'shop_management' },
       { key: 'printing-main-option', label: 'プランオプション印刷設定', href: '/printing/mainOption', feature: 'shop_management' },
+      { key: 'kitchen-printer', label: 'キッチンプリンター一覧', href: '/kitchenPrinter', feature: 'shop_management' },
       { key: 'dish-up', label: 'デシャップグループ', href: '/dishUpSlipGroup', feature: 'shop_management' },
       { key: 'cooking-item', label: '調理アイテム', href: '/cookingItem', feature: 'shop_management' },
       { key: 'kitchen-order', label: 'キッチン表示・印刷順', href: '/menu/kitchen-display-order/edit', feature: 'shop_management' },
@@ -140,6 +143,7 @@ export const BI_MENU: MenuGroup[] = [
     label: 'ダッシュボード',
     children: [
       { key: 'fl', label: '店舗管理ダッシュボード', href: '/bi/flDashboard', feature: 'bi_integration' },
+      { key: 'sales-calendar', label: '営業カレンダー', href: '/bi/salesCalendar', feature: 'bi_integration' },
       { key: 'current', label: '売上速報', href: '/bi/current-sales', feature: 'analytics' },
       { key: 'daily-report', label: '日報', href: '/bi/dailySalesReport', feature: 'analytics' },
     ],
@@ -149,6 +153,8 @@ export const BI_MENU: MenuGroup[] = [
     label: 'PL',
     children: [
       { key: 'monthly-pl', label: '月次 PL', href: '/bi/monthlyPl', feature: 'monthly_pl_report' },
+      { key: 'monthly-pl-shop', label: 'PL 店舗 月別', href: '/bi/monthlyPlShop', feature: 'monthly_pl_report' },
+      { key: 'daily-pl', label: 'PL 店舗 日別', href: '/bi/dailyPl', feature: 'monthly_pl_report' },
       { key: 'kpi-target', label: '目標設定', href: '/bi/kpiTarget', feature: 'target_management' },
     ],
   },
@@ -159,7 +165,10 @@ export const BI_MENU: MenuGroup[] = [
       { key: 'sales', label: '売上分析', href: '/bi/sales-analytics', feature: 'analytics' },
       { key: 'product', label: '商品分析', href: '/bi/product-analytics', feature: 'analytics' },
       { key: 'dow-hour', label: '曜日・時間帯別', href: '/bi/dow-hour', feature: 'analytics' },
+      { key: 'demographics', label: '性別・年代分析', href: '/bi/demographics', feature: 'analytics' },
+      { key: 'cooking-time', label: '調理・配膳時間分析', href: '/bi/cookingTime', feature: 'analytics' },
       { key: 'forecast', label: '売上予測', href: '/bi/sales-forecast', feature: 'analytics' },
+      { key: 'custom-reports', label: 'カスタムレポート', href: '/bi/customReports', feature: 'analytics' },
     ],
   },
   {
@@ -189,7 +198,7 @@ export const SETTING_MENU: MenuGroup[] = [
       { key: 'account', label: 'アカウント', href: '/setting/account', feature: 'account_management' },
       { key: 'role', label: '権限設定', href: '/setting/role', feature: 'account_management' },
       { key: 'shop-group', label: '店舗グループ', href: '/setting/shopGroup', feature: 'account_management' },
-      { key: 'account-audit', label: 'アカウント操作履歴', href: '/setting/auditLogs', feature: 'account_audit_logs', pending: true },
+      { key: 'account-audit', label: 'アカウント操作履歴', href: '/setting/auditLogs', feature: 'account_audit_logs' },
     ],
   },
 ];
@@ -210,7 +219,7 @@ export const ATTRACT_MENU: MenuGroup[] = [
     label: '集客',
     children: [
       { key: 'attract-dashboard', label: '集客ダッシュボード', href: '/attract/dashboard', feature: 'attract_all' },
-      { key: 'review', label: 'クチコミ獲得', href: '/attract/review', feature: 'attract_all', pending: true },
+      { key: 'review', label: 'クチコミ獲得', href: '/attract/review', feature: 'attract_all' },
     ],
   },
 ];

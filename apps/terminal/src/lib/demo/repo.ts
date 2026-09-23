@@ -17,6 +17,7 @@ import type {
   OrderItem,
   OrderItemStatus,
   Payment,
+  ShopPaymentMethod,
   PaymentMethod,
   PrepStation,
   RestaurantTable,
@@ -678,7 +679,12 @@ export function checkoutPayment(
   method: PaymentMethod,
   discount: number,
   received: number,
-  options: { itemIds?: string[] | null; splitCount?: number; splitIndex?: number } = {}
+  options: {
+    itemIds?: string[] | null;
+    splitCount?: number;
+    splitIndex?: number;
+    paymentMethodId?: string | null;
+  } = {}
 ): string {
   const state = db();
   const itemIds = options.itemIds ?? null;
@@ -718,6 +724,7 @@ export function checkoutPayment(
     store_id: state.store.id,
     session_id: sessionId,
     method,
+    payment_method_id: options.paymentMethodId ?? null,
     subtotal: Math.round(calc.subtotal * ratio),
     discount: Math.round(calc.discount * ratio),
     service_charge: Math.round(calc.service_charge * ratio),
@@ -1100,4 +1107,18 @@ export function saveStoreSettings(input: {
 export function changePin(): never {
   // PIN はデモでは固定。変更できると再ログインできなくなるため受け付けない
   throw new Error('デモモードでは PIN を変更できません（固定で 1234 です）。');
+}
+
+/**
+ * デモの支払方法。ダッシュボードの既定（§5.10 の seed）と同じ並びにしておく。
+ */
+export function getShopPaymentMethods(): ShopPaymentMethod[] {
+  return [
+    { id: 'pm-cash', name: '現金', kind: 'cash', display_order: 10 },
+    { id: 'pm-credit', name: 'クレジットカード', kind: 'credit', display_order: 20 },
+    { id: 'pm-qr', name: 'QR決済', kind: 'qr', display_order: 30 },
+    { id: 'pm-emoney', name: '電子マネー', kind: 'e_money', display_order: 40 },
+    { id: 'pm-mobile', name: 'モバイル決済', kind: 'mobile', display_order: 50 },
+    { id: 'pm-gift', name: '商品券', kind: 'gift_certificate', display_order: 60 },
+  ];
 }

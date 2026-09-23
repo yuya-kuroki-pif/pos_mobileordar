@@ -1,6 +1,8 @@
 'use client';
 
+import { ThunderboltOutlined } from '@ant-design/icons';
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -22,6 +24,7 @@ import { useState, useTransition } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
 import { saveDailyTargetsAction, saveKpiTargetAction } from '@/lib/actions/target';
+import { suggestKpiTargetAction } from '@/lib/actions/targetAi';
 import type { DailySalesTarget, KpiTarget, Shop } from '@/lib/types';
 
 const yen = new Intl.NumberFormat('ja-JP');
@@ -36,6 +39,7 @@ export function KpiTargetView({
   lastMonthSales,
   companyName,
   editable,
+  aiReady,
 }: {
   shops: Shop[];
   shopId?: string;
@@ -45,9 +49,12 @@ export function KpiTargetView({
   lastMonthSales: number;
   companyName: string;
   editable: boolean;
+  aiReady: boolean;
 }) {
   const router = useRouter();
   const { message } = App.useApp();
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestionNote, setSuggestionNote] = useState<string | null>(null);
   const [form] = Form.useForm();
   const [adjust, setAdjust] = useState(0);
   const [pending, startTransition] = useTransition();
@@ -55,6 +62,24 @@ export function KpiTargetView({
   const daysInMonth = dayjs(yearMonth).daysInMonth();
   const suggestion = Math.round(lastMonthSales * (1 + adjust / 100));
   const dailyTotal = dailyTargets.reduce((sum, t) => sum + t.amount, 0);
+
+  function suggest() {
+    if (!shopId) return;
+    setSuggesting(true);
+    setSuggestionNote(null);
+    startTransition(async () => {
+      const result = await suggestKpiTargetAction(shopId, yearMonth);
+      setSuggesting(false);
+      if (!result.ok || !result.suggestion) {
+        message.error(result.error ?? '目安を出せませんでした');
+        return;
+      }
+      // 保存はしない。人が確かめてから保存を押す
+      const { reason, ...values } = result.suggestion;
+      form.setFieldsValue(values);
+      setSuggestionNote(reason);
+    });
+  }
 
   function go(next: { shop?: string; month?: string }) {
     const params = new URLSearchParams();
@@ -129,9 +154,39 @@ export function KpiTargetView({
               allowClear={false}
               onChange={(value) => go({ month: value.format('YYYY-MM') })}
             />
+            <Button
+              icon={<ThunderboltOutlined />}
+              onClick={suggest}
+              loading={suggesting}
+              disabled={!editable || !aiReady || !shopId}
+            >
+              AIで一括入力
+            </Button>
           </Space>
         }
       />
+
+      {!aiReady && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="「AIで一括入力」を使うには設定が要ります"
+          description="ANTHROPIC_API_KEY を .env.local に設定すると、過去 6 ヶ月の実績から目標の目安を入れられます。"
+        />
+      )}
+
+      {suggestionNote && (
+        <Alert
+          type="success"
+          showIcon
+          closable
+          onClose={() => setSuggestionNote(null)}
+          style={{ marginBottom: 16 }}
+          message="AI が出した目安をフォームに入れました"
+          description={`${suggestionNote} 保存を押すまでは反映されません。数字を確かめてから保存してください。`}
+        />
+      )}
 
       <Row gutter={16}>
         <Col xs={24} lg={10}>

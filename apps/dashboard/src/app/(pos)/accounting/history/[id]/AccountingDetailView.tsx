@@ -1,12 +1,12 @@
 'use client';
 
-import { Alert, App, Button, Card, Col, Descriptions, Row, Space, Table, Tag } from 'antd';
+import { Alert, App, Button, Card, Col, Descriptions, Input, InputNumber, Row, Space, Table, Tag } from 'antd';
 import dayjs from 'dayjs';
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
-import { voidAccountingAction } from '@/lib/actions/accounting';
+import { modifyAccountingAction, voidAccountingAction } from '@/lib/actions/accounting';
 import type { AccountingDetail } from '@/lib/transactionQueries';
 import type { OrderItemRecord } from '@/lib/types';
 
@@ -31,6 +31,50 @@ export function AccountingDetailView({
   const [error, setError] = useState<string | null>(null);
 
   const { payment, items, session } = detail;
+
+  // 明細の修正。触った行だけ覚えておき、保存のときにまとめて送る
+  const [edits, setEdits] = useState<Record<string, { unit_price: number; quantity: number }>>({});
+  const [reason, setReason] = useState('');
+
+  const locked = !editable || Boolean(payment.voided_at);
+  const dirty = Object.keys(edits).length > 0;
+
+  const valueOf = (item: OrderItemRecord, key: 'unit_price' | 'quantity') =>
+    edits[item.id]?.[key] ?? item[key];
+
+  function edit(item: OrderItemRecord, key: 'unit_price' | 'quantity', value: number) {
+    setEdits((prev) => ({
+      ...prev,
+      [item.id]: {
+        unit_price: prev[item.id]?.unit_price ?? item.unit_price,
+        quantity: prev[item.id]?.quantity ?? item.quantity,
+        [key]: value,
+      },
+    }));
+  }
+
+  function saveEdits() {
+    if (!reason.trim()) {
+      setError('修正の理由を入力してください。重要操作履歴に残ります。');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const result = await modifyAccountingAction(
+        payment.id,
+        Object.entries(edits).map(([item_id, value]) => ({ item_id, ...value })),
+        reason.trim()
+      );
+      if (!result.ok) {
+        setError(result.error ?? '修正できませんでした');
+        return;
+      }
+      message.success('修正しました');
+      setEdits({});
+      setReason('');
+      router.refresh();
+    });
+  }
 
   function confirmVoid() {
     modal.confirm({
@@ -137,28 +181,76 @@ export function AccountingDetailView({
           columns={[
             { title: 'メニュー名', dataIndex: 'name_snapshot' },
             {
-              title: '単価',
-              dataIndex: 'unit_price',
-              width: 120,
+              title: '支払価格（税込）',
+              key: 'unit_price',
+              width: 150,
               align: 'right',
-              render: (value: number) => <span className="tabular">{money(value)}</span>,
+              render: (_, item) => (
+                <InputNumber
+                  value={valueOf(item, 'unit_price')}
+                  min={0}
+                  step={10}
+                  disabled={locked}
+                  style={{ width: '100%' }}
+                  onChange={(value) => edit(item, 'unit_price', Number(value ?? 0))}
+                />
+              ),
             },
             {
               title: '個数',
-              dataIndex: 'quantity',
-              width: 90,
+              key: 'quantity',
+              width: 110,
               align: 'right',
-              render: (value: number) => <span className="tabular">{value}</span>,
+              render: (_, item) => (
+                <InputNumber
+                  value={valueOf(item, 'quantity')}
+                  min={0}
+                  disabled={locked}
+                  style={{ width: '100%' }}
+                  onChange={(value) => edit(item, 'quantity', Number(value ?? 0))}
+                />
+              ),
             },
             {
               title: '小計',
-              dataIndex: 'line_total',
+              key: 'line_total',
               width: 120,
               align: 'right',
-              render: (value: number) => <span className="tabular">{money(value)}</span>,
+              render: (_, item) => (
+                <span className="tabular">
+                  {money(valueOf(item, 'unit_price') * valueOf(item, 'quantity'))}
+                </span>
+              ),
             },
           ]}
         />
+
+        {dirty && (
+          <div style={{ padding: 16, borderTop: '1px solid #f0f0f0' }}>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Alert
+                type="warning"
+                showIcon
+                message="明細を変更しています"
+                description="保存すると会計の合計と消費税も引き直され、重要操作履歴に残ります。"
+              />
+              <Input
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                placeholder="修正の理由（必須）"
+                maxLength={200}
+              />
+              <Space>
+                <Button type="primary" onClick={saveEdits} loading={pending}>
+                  修正を保存
+                </Button>
+                <Button onClick={() => setEdits({})} disabled={pending}>
+                  やめる
+                </Button>
+              </Space>
+            </Space>
+          </div>
+        )}
       </Card>
 
       {error && <Alert type="error" showIcon message={error} style={{ marginTop: 16 }} />}

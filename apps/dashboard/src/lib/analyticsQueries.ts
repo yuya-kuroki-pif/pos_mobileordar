@@ -2,7 +2,13 @@ import 'server-only';
 
 import { db } from './demo';
 import { isDemoMode, supabaseAdmin } from './supabase';
-import type { DailySummary, HourlySummary, MenuSummary, ProductType } from './types';
+import type {
+  DailySummary,
+  HourlySummary,
+  MenuSummary,
+  OrderItemOption,
+  ProductType,
+} from './types';
 
 /**
  * 分析の集計（仕様書 §6.x）。
@@ -292,4 +298,200 @@ export async function getShopSummaries(
   }
 
   return [...byShop.values()];
+}
+
+export interface CookingTimeRow {
+  menu_id: string;
+  name: string;
+  category: string;
+  orders: number;
+  /** 分。注文 → 調理完了 */
+  cook_min: number;
+  /** 分。調理完了 → スタッフが受け取る */
+  pickup_min: number;
+  /** 分。受け取り → お客様に出す */
+  serve_min: number;
+  total_min: number;
+}
+
+/**
+ * 調理・配膳時間分析（§6.9）。
+ * KDS の打刻が入っている明細だけを数える。打刻が無い店舗は 0 件になる。
+ */
+export async function getCookingTimes(
+  shopIds: string[],
+  range: Range,
+  categoryByMenu: Map<string, string>
+): Promise<CookingTimeRow[]> {
+  if (shopIds.length === 0) return [];
+
+  let items: {
+    menu_id: string | null;
+    name_snapshot: string;
+    placed_at: string;
+    cooked_at: string | null;
+    picked_up_at: string | null;
+    served_at: string | null;
+  }[] = [];
+
+  if (isDemoMode()) {
+    const state = db();
+    const orders = new Map(
+      state.orderRecords
+        .filter((order) => shopIds.includes(order.store_id))
+        .map((order) => [order.id, order])
+    );
+    items = state.orderItemRecords
+      .filter((item) => orders.has(item.order_id))
+      .map((item) => ({
+        menu_id: item.menu_id,
+        name_snapshot: item.name_snapshot,
+        placed_at: orders.get(item.order_id)!.placed_at,
+        cooked_at: item.cooked_at,
+        picked_up_at: item.picked_up_at,
+        served_at: item.served_at,
+      }))
+      .filter((item) => {
+        const day = item.placed_at.slice(0, 10);
+        return day >= range.from && day <= range.to;
+      });
+  } else {
+    const { data, error } = await supabaseAdmin()
+      .from('order_items')
+      .select('menu_id, name_snapshot, cooked_at, picked_up_at, served_at, orders!inner(store_id, placed_at)')
+      .in('orders.store_id', shopIds)
+      .gte('orders.placed_at', `${range.from}T00:00:00+09:00`)
+      .lte('orders.placed_at', `${range.to}T23:59:59+09:00`)
+      .not('served_at', 'is', null)
+      .limit(20000);
+
+    if (error) throw new Error(error.message);
+    items = ((data ?? []) as unknown as {
+      menu_id: string | null;
+      name_snapshot: string;
+      cooked_at: string | null;
+      picked_up_at: string | null;
+      served_at: string | null;
+      orders: { placed_at: string };
+    }[]).map((row) => ({
+      menu_id: row.menu_id,
+      name_snapshot: row.name_snapshot,
+      placed_at: row.orders.placed_at,
+      cooked_at: row.cooked_at,
+      picked_up_at: row.picked_up_at,
+      served_at: row.served_at,
+    }));
+  }
+
+  const minutes = (from: string, to: string) =>
+    (Date.parse(to) - Date.parse(from)) / 60000;
+
+  const acc = new Map<
+    string,
+    { name: string; orders: number; cook: number; pickup: number; serve: number }
+  >();
+
+  for (const item of items) {
+    if (!item.cooked_at || !item.picked_up_at || !item.served_at) continue;
+    const key = item.menu_id ?? item.name_snapshot;
+    const current = acc.get(key) ?? { name: item.name_snapshot, orders: 0, cook: 0, pickup: 0, serve: 0 };
+    current.orders += 1;
+    current.cook += minutes(item.placed_at, item.cooked_at);
+    current.pickup += minutes(item.cooked_at, item.picked_up_at);
+    current.serve += minutes(item.picked_up_at, item.served_at);
+    acc.set(key, current);
+  }
+
+  const round = (value: number) => Math.round(value * 10) / 10;
+
+  return [...acc.entries()]
+    .map(([menuId, value]) => {
+      const cook = round(value.cook / value.orders);
+      const pickup = round(value.pickup / value.orders);
+      const serve = round(value.serve / value.orders);
+      return {
+        menu_id: menuId,
+        name: value.name,
+        category: categoryByMenu.get(menuId) ?? '—',
+        orders: value.orders,
+        cook_min: cook,
+        pickup_min: pickup,
+        serve_min: serve,
+        total_min: round(cook + pickup + serve),
+      };
+    })
+    .sort((a, b) => b.total_min - a.total_min);
+}
+
+export interface OptionSummary {
+  key: string;
+  group: string;
+  name: string;
+  qty: number;
+  sales: number;
+}
+
+/** オプション別の出数と売上（§6.5 の粒度タブ「オプション別」） */
+export async function getOptionSummaries(
+  shopIds: string[],
+  range: Range
+): Promise<OptionSummary[]> {
+  if (shopIds.length === 0) return [];
+
+  let items: { quantity: number; options_snapshot: OrderItemOption[] }[] = [];
+
+  if (isDemoMode()) {
+    const state = db();
+    const sessionIds = new Set(
+      state.paymentRecords
+        .filter((p) => {
+          if (!shopIds.includes(p.store_id)) return false;
+          const day = p.paid_at.slice(0, 10);
+          return day >= range.from && day <= range.to && p.status === 'paid';
+        })
+        .map((p) => p.session_id)
+    );
+    items = state.orderItemRecords
+      .filter((item) => sessionIds.has(item.session_id))
+      .map((item) => ({ quantity: item.quantity, options_snapshot: item.options_snapshot }));
+  } else {
+    const supabase = supabaseAdmin();
+
+    const { data: paymentData, error: paymentError } = await supabase
+      .from('payments')
+      .select('session_id')
+      .in('store_id', shopIds)
+      .eq('status', 'paid')
+      .gte('paid_at', `${range.from}T00:00:00+09:00`)
+      .lte('paid_at', `${range.to}T23:59:59+09:00`);
+    if (paymentError) throw new Error(paymentError.message);
+
+    const sessionIds = ((paymentData ?? []) as { session_id: string }[]).map((p) => p.session_id);
+    if (sessionIds.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from('order_items')
+      .select('quantity, options_snapshot')
+      .in('session_id', sessionIds)
+      .limit(20000);
+    if (error) throw new Error(error.message);
+
+    items = (data ?? []) as { quantity: number; options_snapshot: OrderItemOption[] }[];
+  }
+
+  const acc = new Map<string, OptionSummary>();
+
+  for (const item of items) {
+    for (const option of item.options_snapshot ?? []) {
+      const key = `${option.group}|${option.name}`;
+      const current =
+        acc.get(key) ?? { key, group: option.group, name: option.name, qty: 0, sales: 0 };
+      current.qty += item.quantity;
+      // オプションの売上は差額ぶんだけ。本体の価格は商品側で数える
+      current.sales += option.price_delta * item.quantity;
+      acc.set(key, current);
+    }
+  }
+
+  return [...acc.values()].sort((a, b) => b.qty - a.qty);
 }

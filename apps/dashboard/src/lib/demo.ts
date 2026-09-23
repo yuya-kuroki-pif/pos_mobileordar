@@ -3,6 +3,7 @@ import 'server-only';
 import { buildMenuMaster } from './demoMenu';
 import { buildPlanGroups, buildPlans, type PlanState } from './demoPlan';
 import { buildCrm, type CrmState } from './demoCrm';
+import { buildExtras, type ExtrasState } from './demoExtras';
 import { buildTransactions, type TransactionState } from './demoTransactions';
 import type {
   Account,
@@ -60,7 +61,7 @@ import type {
 
 const CORP_ID = 'corp-demo';
 
-export interface DemoState extends PlanState, TransactionState, CrmState {
+export interface DemoState extends PlanState, TransactionState, CrmState, ExtrasState {
   corporation: Corporation;
   companies: Company[];
   shops: Shop[];
@@ -227,8 +228,9 @@ function defaultRoles(): RoleDefinition[] {
         daily_closing: 'edit', accounting_history: 'edit', table_usage_history: 'edit',
         payment_settings: 'edit', cashless: 'edit', recommendation_menu: 'edit',
         monthly_pl_report: 'edit', pl_accounts: 'edit', income_expense: 'edit',
+        attract_all: 'edit',
         cost_display: 'view', labor_cost_parttime_display: 'view',
-        labor_cost_employee_display: 'view', audit_logs: 'view', account_audit_logs: 'none',
+        labor_cost_employee_display: 'view', audit_logs: 'view', account_audit_logs: 'view',
       },
     },
     {
@@ -246,6 +248,7 @@ function defaultRoles(): RoleDefinition[] {
         daily_closing: 'edit', accounting_history: 'edit', table_usage_history: 'edit',
         payment_settings: 'edit', cashless: 'none', recommendation_menu: 'edit',
         monthly_pl_report: 'view', pl_accounts: 'view', income_expense: 'view',
+        attract_all: 'edit',
         cost_display: 'view', labor_cost_parttime_display: 'view',
         labor_cost_employee_display: 'none', audit_logs: 'view', account_audit_logs: 'none',
       },
@@ -265,6 +268,7 @@ function defaultRoles(): RoleDefinition[] {
         daily_closing: 'view', accounting_history: 'view', table_usage_history: 'none',
         payment_settings: 'none', cashless: 'none', recommendation_menu: 'view',
         monthly_pl_report: 'view', pl_accounts: 'none', income_expense: 'view',
+        attract_all: 'view',
         cost_display: 'view', labor_cost_parttime_display: 'none',
         labor_cost_employee_display: 'view', audit_logs: 'view', account_audit_logs: 'none',
       },
@@ -330,6 +334,7 @@ function createState(): DemoState {
 
   // 取引データ。履歴画面と分析画面の見た目を確かめるために 30 日ぶん作る
   const transactions = buildTransactions({
+    corporationId: CORP_ID,
     shops: shops.map((s) => ({ id: s.id, company_id: s.company_id })),
     menus: master.menus,
     tableIdsByShop: Object.fromEntries(
@@ -349,6 +354,23 @@ function createState(): DemoState {
           .map((m) => ({ id: m.id, name: m.name, kind: m.kind })),
       ])
     ),
+    optionsByMenu: Object.fromEntries(
+      master.menus.map((menu) => [
+        menu.id,
+        master.menuOptions
+          .filter((link) => link.menu_id === menu.id)
+          .map((link) => {
+            const option = master.options.find((o) => o.id === link.option_id);
+            return {
+              group: option?.name ?? '',
+              choices: master.choices
+                .filter((choice) => choice.option_id === link.option_id)
+                .map((choice) => ({ name: choice.name, price: choice.price })),
+            };
+          })
+          .filter((group) => group.choices.length > 0),
+      ])
+    ),
     inflowSourceIdsByCompany: Object.fromEntries(
       companies.map((c) => [
         c.id,
@@ -356,6 +378,27 @@ function createState(): DemoState {
       ])
     ),
     days: 30,
+  });
+
+  const crm = buildCrm(
+    CORP_ID,
+    companies.map((c) => c.id),
+    shops.map((s) => s.id),
+    master.menus.map((m) => m.id),
+    Object.fromEntries(
+      shops.map((s) => [s.id, p1Rest.clerks.filter((c) => c.shop_id === s.id).map((c) => c.id)])
+    )
+  );
+
+  // 配信やクーポンの実績は、CRM のデータが決まってから作る
+  const extras = buildExtras({
+    corporationId: CORP_ID,
+    companyIds: companies.map((c) => c.id),
+    shops: shops.map((s) => ({ id: s.id, company_id: s.company_id, name: s.name })),
+    deliveries: crm.messageDeliveries.map((d) => ({ id: d.id, company_id: d.company_id })),
+    coupons: crm.coupons.map((c) => ({ id: c.id, company_id: c.company_id })),
+    customerIds: crm.customers.map((c) => c.id),
+    accounts: accounts.map((a) => ({ id: a.id, name: a.name })),
   });
 
   return {
@@ -398,15 +441,8 @@ function createState(): DemoState {
     ...paymentSettings,
     ...p1Rest,
     ...transactions,
-    ...buildCrm(
-      CORP_ID,
-      companies.map((c) => c.id),
-      shops.map((s) => s.id),
-      master.menus.map((m) => m.id),
-      Object.fromEntries(
-        shops.map((s) => [s.id, p1Rest.clerks.filter((c) => c.shop_id === s.id).map((c) => c.id)])
-      )
-    ),
+    ...crm,
+    ...extras,
     lineReportingBotConfigs: [],
     ...buildBiSeeds(
       CORP_ID,
@@ -463,7 +499,7 @@ function createState(): DemoState {
 // HMR でモジュールが作り直されてもデータが消えないよう globalThis に置く。
 // ただし DemoState の形を変えたときは作り直したいので、版を添えて持つ。
 // （版を上げ忘れると、古い形のまま参照して実行時エラーになる）
-const STATE_VERSION = 15;
+const STATE_VERSION = 22;
 
 const g = globalThis as typeof globalThis & {
   __dashboardDemo?: { version: number; state: DemoState };
@@ -798,14 +834,45 @@ function buildBiSeeds(corporationId: string, shopIds: string[]) {
     }));
   });
 
+  // 人件費と販売管理費は収支登録から拾う。PL の科目ツリーを埋めるために置く
+  const incomeExpenseTransactions = shopIds.flatMap((shopId, shopIndex) =>
+    [
+      { account: 'pl-4', amount: 410000 + shopIndex * 20000, note: '当月給与' },
+      { account: 'pl-5', amount: 86000 + shopIndex * 4000, note: '電気・ガス・水道' },
+      { account: 'pl-6', amount: 220000, note: '家賃' },
+    ].map((row, i) => ({
+      id: `${shopId}-ie-${i}`,
+      shop_id: shopId,
+      occurred_on: '2026-09-25',
+      pl_account_id: row.account,
+      vendor_id: null,
+      amount: row.amount,
+      note: row.note,
+    }))
+  ) as Record<string, unknown>[];
+
+  // 小口現金。金額は小さいが、補助科目まで展開したときに出てくる
+  const pettyCashTransactions = shopIds.flatMap((shopId) =>
+    Array.from({ length: 4 }).map((_, i) => ({
+      id: `${shopId}-pc-${i}`,
+      shop_id: shopId,
+      occurred_on: `2026-09-${String(4 + i * 6).padStart(2, '0')}`,
+      pl_account_id: i % 2 === 0 ? 'pl-2' : 'pl-5',
+      vendor_id: null,
+      amount: 3200 + i * 1500,
+      kind: 'out',
+      note: i % 2 === 0 ? '不足分の買い足し' : '備品',
+    }))
+  ) as Record<string, unknown>[];
+
   return {
     plAccounts,
     vendors,
     purchaseTransactions,
     kpiTargets,
     dailySalesTargets,
-    pettyCashTransactions: [] as Record<string, unknown>[],
-    incomeExpenseTransactions: [] as Record<string, unknown>[],
+    pettyCashTransactions,
+    incomeExpenseTransactions,
     dailyReports: [] as DailyReport[],
   };
 }

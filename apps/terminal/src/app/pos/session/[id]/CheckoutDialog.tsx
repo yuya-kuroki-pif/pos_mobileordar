@@ -5,10 +5,17 @@ import { useCallback, useEffect, useState, useTransition } from 'react';
 
 import { Button } from '@/components/ui';
 import { checkout } from '@/lib/actions/order';
-import { PAYMENT_METHOD_LABEL, formatTaxRate, formatYen } from '@/lib/format';
-import type { OrderItem, PaymentMethod, SessionTotal, Store } from '@/lib/types';
+import { formatTaxRate, formatYen } from '@/lib/format';
+import { KIND_TO_METHOD } from '@/lib/types';
+import type { OrderItem, PaymentMethod, SessionTotal, ShopPaymentMethod, Store } from '@/lib/types';
 
-const METHODS: PaymentMethod[] = ['cash', 'card', 'qr', 'e_money'];
+/** 支払方法マスターが空の店舗で使う並び */
+const FALLBACK_METHODS: ShopPaymentMethod[] = [
+  { id: '', name: '現金', kind: 'cash', display_order: 10 },
+  { id: '', name: 'クレジットカード', kind: 'credit', display_order: 20 },
+  { id: '', name: 'QR決済', kind: 'qr', display_order: 30 },
+  { id: '', name: '電子マネー', kind: 'e_money', display_order: 40 },
+];
 
 /** 預かり金の入力を速くするための定番金額 */
 const QUICK_AMOUNTS = [1000, 5000, 10000];
@@ -26,6 +33,7 @@ export function CheckoutDialog({
   sessionId,
   store,
   unpaidItems,
+  paymentMethods,
   onClose,
   onPartialPaid,
 }: {
@@ -33,6 +41,8 @@ export function CheckoutDialog({
   store: Store;
   /** 未会計の明細。明細指定の分割会計で選ばせる */
   unpaidItems: OrderItem[];
+  /** 支払方法マスター（§5.10）。空なら既定の 4 つを出す */
+  paymentMethods: ShopPaymentMethod[];
   onClose: () => void;
   /** まだ未会計が残る会計が済んだとき（画面を開いたまま次の会計へ進む） */
   onPartialPaid: () => void;
@@ -44,7 +54,10 @@ export function CheckoutDialog({
   const [splitCount, setSplitCount] = useState(2);
   const [splitIndex, setSplitIndex] = useState(1);
 
-  const [method, setMethod] = useState<PaymentMethod>('cash');
+  const methods = paymentMethods.length > 0 ? paymentMethods : FALLBACK_METHODS;
+  // マスターの行を選ばせ、記録するときに enum へ寄せる
+  const [selectedMethod, setSelectedMethod] = useState<ShopPaymentMethod>(methods[0]);
+  const method: PaymentMethod = KIND_TO_METHOD[selectedMethod.kind];
   const [discount, setDiscount] = useState(0);
   const [received, setReceived] = useState<number | null>(null);
 
@@ -107,6 +120,7 @@ export function CheckoutDialog({
           itemIds: mode === 'items' ? selectedIds : null,
           splitCount: mode === 'split' ? splitCount : 1,
           splitIndex: mode === 'split' ? splitIndex : 1,
+          paymentMethodId: selectedMethod.id || null,
         }
       );
 
@@ -351,21 +365,21 @@ export function CheckoutDialog({
           <div className="mt-5">
             <p className="mb-2 text-sm font-bold text-charcoal-700">支払方法</p>
             <div className="no-select grid grid-cols-2 gap-2">
-              {METHODS.map((m) => (
+              {methods.map((m, index) => (
                 <button
-                  key={m}
+                  key={m.id || `${m.kind}-${index}`}
                   type="button"
                   onClick={() => {
-                    setMethod(m);
+                    setSelectedMethod(m);
                     setReceived(null);
                   }}
                   className={`rounded-xl border-2 py-3 text-sm font-bold transition-colors ${
-                    method === m
+                    selectedMethod === m
                       ? 'border-ember-500 bg-ember-50 text-ember-700'
                       : 'border-charcoal-100 bg-white text-charcoal-600'
                   }`}
                 >
-                  {PAYMENT_METHOD_LABEL[m]}
+                  {m.name}
                 </button>
               ))}
             </div>

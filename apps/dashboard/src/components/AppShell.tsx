@@ -11,7 +11,7 @@ import {
 import { Avatar, Badge, Button, Dropdown, Layout, Menu, Tooltip, Typography } from 'antd';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 
 import { setUiLocaleAction } from '@/lib/actions/locale';
 import { logoutAction, switchCompanyAction } from '@/lib/actions/session';
@@ -80,6 +80,56 @@ export function AppShell({
       }))
       .filter((group) => group.children.length > 0);
   }, [section, permissions, t]);
+
+  /**
+   * いま開いている画面に当たるメニュー項目。
+   * `/menu/123/edit` のような詳細画面でも `/menu` が光るよう、
+   * 前方一致でいちばん長く一致したものを選ぶ。
+   */
+  const selectedKey = useMemo(() => {
+    const hrefs = MENU_BY_SECTION[section].flatMap((group) =>
+      group.children.map((leaf) => leaf.href)
+    );
+
+    return hrefs
+      .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+      .sort((a, b) => b.length - a.length)[0];
+  }, [section, pathname]);
+
+  /**
+   * サイドバーが長いので、いま開いている項目まで送って見せる。
+   * メニューの高さが決まるまで少し時間がかかるので、見えるようになるまで
+   * 数回だけ測り直す。動かすのはサイドバーの中だけで、本文はそのまま。
+   */
+  useEffect(() => {
+    if (!selectedKey || collapsed) return;
+
+    let timer = 0;
+    let tries = 0;
+
+    const tick = () => {
+      const sider = document.querySelector<HTMLElement>('.ant-layout-sider');
+      const item = sider?.querySelector<HTMLElement>('.ant-menu-item-selected');
+
+      if (sider && item && sider.scrollHeight > sider.clientHeight) {
+        const itemRect = item.getBoundingClientRect();
+        const siderRect = sider.getBoundingClientRect();
+
+        // すでに見えているなら動かさない
+        if (itemRect.top < siderRect.top || itemRect.bottom > siderRect.bottom) {
+          sider.scrollTop +=
+            itemRect.top - siderRect.top - sider.clientHeight / 2 + itemRect.height / 2;
+        }
+        return;
+      }
+
+      tries += 1;
+      if (tries < 10) timer = window.setTimeout(tick, 50);
+    };
+
+    timer = window.setTimeout(tick, 0);
+    return () => window.clearTimeout(timer);
+  }, [selectedKey, collapsed]);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -188,12 +238,20 @@ export function AppShell({
           collapsible
           collapsed={collapsed}
           onCollapse={setCollapsed}
-          style={{ borderRight: '1px solid #f0f0f0' }}
+          // ヘッダーの下に貼り付けて、本文だけがスクロールするようにする。
+          // 項目が多いので、長い画面でもナビを見失わないため
+          style={{
+            borderRight: '1px solid #f0f0f0',
+            position: 'sticky',
+            top: 64,
+            height: 'calc(100vh - 64px)',
+            overflowY: 'auto',
+          }}
         >
           <Menu
             mode="inline"
             items={menuItems}
-            selectedKeys={[pathname]}
+            selectedKeys={selectedKey ? [selectedKey] : []}
             style={{ borderInlineEnd: 'none', paddingTop: 8 }}
           />
           {!collapsed && (

@@ -58,12 +58,15 @@ function at(day: string, hour: number, minute: number): string {
 }
 
 export interface TransactionSeedInput {
+  corporationId: string;
   shops: { id: string; company_id: string }[];
   menus: Menu[];
   tableIdsByShop: Record<string, string[]>;
   clerkIdsByShop: Record<string, string[]>;
   paymentMethodsByCompany: Record<string, { id: string; name: string; kind: string }[]>;
   inflowSourceIdsByCompany: Record<string, string[]>;
+  /** メニューに紐づくオプション。注文明細の options_snapshot を作るのに使う */
+  optionsByMenu: Record<string, { group: string; choices: { name: string; price: number }[] }[]>;
   /** 何日ぶん作るか */
   days: number;
 }
@@ -134,13 +137,14 @@ export function buildTransactions(input: TransactionSeedInput): TransactionState
 
         for (let o = 0; o < orderCount; o += 1) {
           const orderId = `${sessionId}-o${o}`;
+          const placedAt = at(day, hour, Math.min(minute + o * 10, 59));
           orderRecords.push({
             id: orderId,
             store_id: shop.id,
             session_id: sessionId,
             order_number: o + 1,
             channel: random() > 0.4 ? 'mobile' : 'handy',
-            placed_at: at(day, hour, Math.min(minute + o * 10, 59)),
+            placed_at: placedAt,
           });
 
           const itemCount = 2 + Math.floor(random() * 4);
@@ -151,6 +155,24 @@ export function buildTransactions(input: TransactionSeedInput): TransactionState
 
             subtotal += lineTotal;
             tax += Math.round((lineTotal * menu.tax_rate) / (1 + menu.tax_rate));
+
+            // KDS の打刻。ドリンクは早く、フードは時間がかかる想定で散らす
+            const cookMin = menu.menu_type === 'drink' ? 1 + random() * 3 : 5 + random() * 12;
+            const pickMin = 0.5 + random() * 2.5;
+            const serveMin = 0.5 + random() * 2;
+            const plus = (base: string, minutes: number) =>
+              new Date(Date.parse(base) + minutes * 60000).toISOString();
+            const cookedAt = plus(placedAt, cookMin);
+            const pickedUpAt = plus(cookedAt, pickMin);
+
+            // オプションは、付いているメニューの 6 割くらいで選ばれる想定
+            const optionGroups = input.optionsByMenu[menu.id] ?? [];
+            const chosen = optionGroups
+              .filter(() => random() > 0.4)
+              .map((group) => {
+                const choice = pick(random, group.choices);
+                return { group: group.group, name: choice.name, price_delta: choice.price };
+              });
 
             orderItemRecords.push({
               id: `${orderId}-i${i}`,
@@ -163,6 +185,10 @@ export function buildTransactions(input: TransactionSeedInput): TransactionState
               tax_rate: menu.tax_rate,
               line_total: lineTotal,
               status: 'served',
+              options_snapshot: chosen,
+              cooked_at: cookedAt,
+              picked_up_at: pickedUpAt,
+              served_at: plus(pickedUpAt, serveMin),
             });
           }
         }
@@ -322,6 +348,42 @@ export function buildTransactions(input: TransactionSeedInput): TransactionState
     });
   }
 
+  // 入金履歴（§5.24）。月 2 回振込を前提に、決済ぶんを締め日でまとめる
+  const cycles = [
+    { start: 16, end: 31, label: '後半' },
+    { start: 1, end: 15, label: '前半' },
+  ];
+  const terminalDeposits: TerminalDeposit[] = cycles.map((cycle, index) => {
+    const inCycle = terminalPayments.filter((payment) => {
+      const day = Number(payment.occurred_at.slice(8, 10));
+      return day >= cycle.start && day <= cycle.end;
+    });
+    const sales = inCycle.reduce((sum, p) => sum + p.amount, 0);
+    const fee = inCycle.reduce((sum, p) => sum + p.fee, 0);
+    const tax = Math.round(fee * 0.1);
+    const month = businessDay(today, 0).slice(0, 7);
+
+    return {
+      id: `deposit-${index}`,
+      corporation_id: input.corporationId,
+      requested_at: at(`${month}-${String(cycle.end === 31 ? 28 : 18).padStart(2, '0')}`, 10, 0),
+      executed_at:
+        index === 0 ? null : at(`${month}-${String(cycle.end === 31 ? 28 : 25).padStart(2, '0')}`, 10, 0),
+      bank_account: '三井住友銀行 ****1234',
+      cycle_start: `${month}-${String(cycle.start).padStart(2, '0')}`,
+      cycle_end: `${month}-${String(Math.min(cycle.end, 28)).padStart(2, '0')}`,
+      amount: sales - fee - tax,
+      sales,
+      fee,
+      tax,
+      adjustment: 0,
+      carryover: 0,
+      cycle_type: '月2回振込',
+      status: index === 0 ? '入金予定' : '入金済み',
+      statement_no: `ST-2026${String(index + 1).padStart(4, '0')}`,
+    };
+  });
+
   return {
     tableSessions,
     orderRecords,
@@ -331,6 +393,6 @@ export function buildTransactions(input: TransactionSeedInput): TransactionState
     cashClosings,
     bankDepositCorrections,
     terminalPayments,
-    terminalDeposits: [],
+    terminalDeposits,
   };
 }

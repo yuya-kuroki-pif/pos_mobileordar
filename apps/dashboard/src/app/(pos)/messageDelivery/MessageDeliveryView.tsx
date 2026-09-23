@@ -1,10 +1,19 @@
 'use client';
 
-import { PlusOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Col, Row, Statistic, Table, Tabs, Tag, Typography } from 'antd';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  Alert, App, Button, Card, Col, Popconfirm, Row, Space, Statistic, Table, Tabs, Tag, Typography,
+} from 'antd';
 import dayjs from 'dayjs';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useTransition } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import {
+  deleteDeliveryAction,
+  setDeliveryStatusAction,
+} from '@/lib/actions/messageDelivery';
 import {
   CHANNEL_LABELS,
   DELIVERY_STATUS_LABELS,
@@ -37,11 +46,39 @@ export function MessageDeliveryView({
   deliveries,
   accounts,
   companyName,
+  editable,
 }: {
   deliveries: MessageDelivery[];
   accounts: MessagingAccount[];
   companyName: string;
+  editable: boolean;
 }) {
+  const router = useRouter();
+  const { message } = App.useApp();
+  const [pending, startTransition] = useTransition();
+
+  function changeStatus(id: string, status: DeliveryStatus) {
+    startTransition(async () => {
+      const result = await setDeliveryStatusAction(id, status);
+      if (!result.ok) {
+        message.error(result.error ?? '状態を変えられませんでした');
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function remove(id: string) {
+    startTransition(async () => {
+      const result = await deleteDeliveryAction(id);
+      if (!result.ok) {
+        message.error(result.error ?? '削除できませんでした');
+        return;
+      }
+      message.success('削除しました');
+      router.refresh();
+    });
+  }
 
   function table(rows: MessageDelivery[]) {
     return (
@@ -63,7 +100,15 @@ export function MessageDeliveryView({
                 <Tag color={value === 'zalo' ? 'cyan' : 'green'}>{CHANNEL_LABELS[value]}</Tag>
               ),
             },
-            { title: '配信管理名', dataIndex: 'name', width: 280, fixed: 'left' },
+            {
+              title: '配信管理名',
+              dataIndex: 'name',
+              width: 280,
+              fixed: 'left',
+              render: (value: string, row) => (
+                <Link href={`/messageDelivery/${row.id}/edit`}>{value}</Link>
+              ),
+            },
             {
               title: '配信対象',
               key: 'target',
@@ -109,6 +154,41 @@ export function MessageDeliveryView({
               width: 110,
               render: (value: boolean) => (value ? <Tag color="blue">有効</Tag> : <Tag>—</Tag>),
             },
+            {
+              title: '操作',
+              key: 'actions',
+              width: 200,
+              fixed: 'right',
+              render: (_, row) => (
+                <Space>
+                  {row.status === 'suspended' ? (
+                    <Button
+                      size="small"
+                      disabled={!editable || pending}
+                      onClick={() => changeStatus(row.id, 'reserved')}
+                    >
+                      再開
+                    </Button>
+                  ) : (
+                    <Button
+                      size="small"
+                      disabled={!editable || pending || row.status === 'sent'}
+                      onClick={() => changeStatus(row.id, 'suspended')}
+                    >
+                      停止
+                    </Button>
+                  )}
+                  <Popconfirm
+                    title="この配信を削除しますか？"
+                    onConfirm={() => remove(row.id)}
+                    okText="削除"
+                    cancelText="やめる"
+                  >
+                    <Button size="small" danger icon={<DeleteOutlined />} disabled={!editable} />
+                  </Popconfirm>
+                </Space>
+              ),
+            },
           ]}
         />
       </Card>
@@ -124,9 +204,11 @@ export function MessageDeliveryView({
         description="LINE の友だちへ、条件を絞ってメッセージを送ります"
         breadcrumb={[{ label: companyName }, { label: 'CRM' }, { label: 'メッセージ配信' }]}
         extra={
-          <Button type="primary" icon={<PlusOutlined />} disabled>
-            新規作成
-          </Button>
+          <Link href="/messageDelivery/new/edit">
+            <Button type="primary" icon={<PlusOutlined />} disabled={!editable}>
+              新規作成
+            </Button>
+          </Link>
         }
       />
 
@@ -135,7 +217,7 @@ export function MessageDeliveryView({
         showIcon
         style={{ marginBottom: 16 }}
         message="LINE / Zalo への送信は未実装です"
-        description="配信の設定は保存できますが、実際にメッセージを送る仕組み（LINE Messaging API・Zalo OA API との接続）はまだ動いていません。新規作成もその実装と合わせて開けるようにします。"
+        description="配信の予約・条件・本文は作って保存できますが、実際にメッセージを送る仕組み（LINE Messaging API・Zalo OA API との接続）はまだ動いていません。予約した配信は送られないまま残ります。"
       />
 
       <Row gutter={16} style={{ marginBottom: 16 }}>

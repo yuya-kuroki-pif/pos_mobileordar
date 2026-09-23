@@ -23,7 +23,11 @@ export type CellFormat =
   | { type: 'tags' }
   | { type: 'rank' }
   | { type: 'index' }
-  | { type: 'scoreTag' };
+  | { type: 'scoreTag' }
+  /** 増減。プラスは緑、マイナスは赤で符号つきに出す */
+  | { type: 'delta'; digits?: number; unit?: string }
+  /** 数値のうしろに単位をつける */
+  | { type: 'unit'; unit: string; digits?: number };
 
 export interface DataColumn {
   title: string;
@@ -87,6 +91,32 @@ function renderCell(value: unknown, format: CellFormat | undefined, index: numbe
           ))}
         </Space>
       );
+    case 'delta': {
+      const number = Number(value);
+      const digits = format && 'digits' in format ? (format.digits ?? 1) : 1;
+      const unit = format && 'unit' in format ? (format.unit ?? '') : '';
+
+      if (number === 0) return <span style={{ color: '#bfbfbf' }}>±0{unit}</span>;
+      return (
+        <span className="tabular" style={{ color: number > 0 ? '#389e0d' : '#cf1322' }}>
+          {number > 0 ? '+' : '−'}
+          {Math.abs(number).toFixed(digits)}
+          {unit}
+        </span>
+      );
+    }
+    case 'unit': {
+      const digits = format && 'digits' in format ? format.digits : undefined;
+      const number = Number(value);
+      return (
+        <span className="tabular">
+          {digits === undefined ? yen.format(number) : number.toFixed(digits)}
+          <span style={{ color: '#8c8c8c', marginLeft: 2 }}>
+            {format && 'unit' in format ? format.unit : ''}
+          </span>
+        </span>
+      );
+    }
     case 'scoreTag': {
       const rank = scoreRank(Number(value));
       return (

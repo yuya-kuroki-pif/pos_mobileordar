@@ -1,11 +1,13 @@
 'use client';
 
 import { DownloadOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Col, Row, Select, Space, Statistic, Table, Tag } from 'antd';
+import { Alert, App, Button, Card, Col, Popconfirm, Row, Select, Space, Statistic, Table, Tag } from 'antd';
 import dayjs from 'dayjs';
 import { useRouter } from 'next/navigation';
+import { useState, useTransition } from 'react';
 
 import { PageHeader } from '@/components/PageHeader';
+import { requestRefundAction } from '@/lib/actions/terminalRefund';
 import type { Shop, TerminalPayment } from '@/lib/types';
 
 const yen = new Intl.NumberFormat('ja-JP');
@@ -16,13 +18,32 @@ export function TerminalPaymentView({
   shops,
   shopId,
   companyName,
+  editable,
 }: {
   payments: TerminalPayment[];
   shops: Shop[];
   shopId?: string;
   companyName: string;
+  editable: boolean;
 }) {
   const router = useRouter();
+  const { message } = App.useApp();
+  const [refunding, setRefunding] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
+  function requestRefund(paymentId: string) {
+    setRefunding(paymentId);
+    startTransition(async () => {
+      const result = await requestRefundAction(paymentId);
+      setRefunding(null);
+      if (!result.ok) {
+        message.error(result.error ?? '返金を申請できませんでした');
+        return;
+      }
+      message.success('返金を申請しました。決済会社の管理画面で処理してください。');
+      router.refresh();
+    });
+  }
 
   const sales = payments.reduce((sum, p) => sum + p.amount, 0);
   const fee = payments.reduce((sum, p) => sum + p.fee, 0);
@@ -118,7 +139,7 @@ export function TerminalPaymentView({
         showIcon
         style={{ marginBottom: 16 }}
         message="入金サイクルと手数料プランは決済会社との契約で決まります"
-        description="この画面は端末から取り込んだ取引を並べています。返金申請は決済会社の管理画面から行ってください。"
+        description="返金申請を押すと、この画面に申請した記録が残ります。実際の返金処理は決済会社の管理画面で行ってください。"
       />
 
       <Card styles={{ body: { padding: 0 } }}>
@@ -173,6 +194,30 @@ export function TerminalPaymentView({
             { title: 'ブランド', dataIndex: 'brand', width: 120 },
             { title: '発行国', dataIndex: 'issuer_country', width: 90 },
             { title: 'カード番号', dataIndex: 'masked_pan', width: 180 },
+            {
+              title: '操作',
+              key: 'refund',
+              width: 150,
+              fixed: 'right',
+              render: (_, row) =>
+                row.refund_requested_at ? (
+                  <Tag color="orange">
+                    返金申請済み {row.refund_requested_at.slice(0, 10)}
+                  </Tag>
+                ) : (
+                  <Popconfirm
+                    title="返金を申請しますか？"
+                    description="申請の記録が残ります。実際の返金は決済会社の管理画面で行ってください。"
+                    okText="申請する"
+                    cancelText="やめる"
+                    onConfirm={() => requestRefund(row.id)}
+                  >
+                    <Button size="small" danger disabled={!editable || refunding === row.id}>
+                      返金申請
+                    </Button>
+                  </Popconfirm>
+                ),
+            },
           ]}
         />
       </Card>

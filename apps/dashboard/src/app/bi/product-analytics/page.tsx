@@ -1,5 +1,5 @@
 import { requireSession } from '@/lib/auth';
-import { getMenuSummaries, monthRange } from '@/lib/analyticsQueries';
+import { getMenuSummaries, getOptionSummaries, monthRange } from '@/lib/analyticsQueries';
 
 import { ProductAnalyticsView } from './ProductAnalyticsView';
 
@@ -19,13 +19,18 @@ export default async function ProductAnalyticsPage({
   const shops = session.shops.filter((s) => s.company_id === session.currentCompanyId);
   const shopIds = shop ? [shop] : shops.map((s) => s.id);
 
-  const menus = await getMenuSummaries(shopIds, monthRange(yearMonth), session.currentCompanyId);
+  const range = monthRange(yearMonth);
+  const [menus, options] = await Promise.all([
+    getMenuSummaries(shopIds, range, session.currentCompanyId),
+    getOptionSummaries(shopIds, range),
+  ]);
   const companyName =
     session.companies.find((c) => c.id === session.currentCompanyId)?.name ?? '業態';
 
   return (
     <ProductAnalyticsView
       menus={menus}
+      options={options}
       shops={shops}
       shopId={shop}
       yearMonth={yearMonth}

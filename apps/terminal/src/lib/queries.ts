@@ -20,6 +20,7 @@ import type {
   RestaurantTable,
   SalesSummaryRow,
   SessionTotal,
+  ShopPaymentMethod,
   Store,
   TableSession,
   TableWithSession,
@@ -665,4 +666,21 @@ function shiftDay(ymd: string, days: number): string {
   const date = new Date(`${ymd}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString();
+}
+
+/**
+ * 店舗で使える支払方法（ダッシュボード §5.10 のマスター）。
+ * 未登録なら空を返す。呼び出し側は既定の 4 つにフォールバックする。
+ */
+export async function getShopPaymentMethods(companyId: string): Promise<ShopPaymentMethod[]> {
+  if (isDemoMode()) return demo.getShopPaymentMethods();
+
+  const { data, error } = await supabaseAdmin()
+    .from('payment_methods')
+    .select('id, name, kind, display_order')
+    .eq('company_id', companyId)
+    .order('display_order');
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ShopPaymentMethod[];
 }

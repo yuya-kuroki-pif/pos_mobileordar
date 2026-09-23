@@ -146,3 +146,122 @@ export function scoreMenus(reviews: MenuReview[]): MenuScore[] {
     })
     .sort((a, b) => b.average - a.average || b.count - a.count);
 }
+
+export interface MonthlyScore {
+  month: string;
+  answers: number;
+  revisit: number;
+  service: number;
+  food: number;
+  speed: number;
+  clean: number;
+  average: number;
+}
+
+/** スコア推移（§5.32）。月ごとに 100 点換算でまとめる */
+export function scoreByMonth(answers: QuestionnaireAnswer[]): MonthlyScore[] {
+  const byMonth = new Map<string, QuestionnaireAnswer[]>();
+  for (const answer of answers) {
+    const month = answer.answered_at.slice(0, 7);
+    byMonth.set(month, [...(byMonth.get(month) ?? []), answer]);
+  }
+
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, rows]) => {
+      const revisit = to100(rows.map((r) => r.revisit_score));
+      const service = to100(rows.map((r) => r.service_score));
+      const food = to100(rows.map((r) => r.food_score));
+      const speed = to100(rows.map((r) => r.speed_score));
+      const clean = to100(rows.map((r) => r.clean_score));
+
+      return {
+        month,
+        answers: rows.length,
+        revisit,
+        service,
+        food,
+        speed,
+        clean,
+        average: Math.round((revisit + service + food + speed + clean) / 5),
+      };
+    });
+}
+
+export interface QscRow {
+  shop_id: string;
+  reviews: number;
+  good_rate: number;
+  service: number;
+  food: number;
+  speed: number;
+  clean: number;
+}
+
+/**
+ * QSC 相関（§5.32）。
+ * 店舗ごとに「スタッフの Good 率」と「アンケートの各スコア」を並べ、
+ * どれと一緒に動いているかを見る。
+ */
+export function qscCorrelation(
+  reviews: EmployeeReview[],
+  answers: QuestionnaireAnswer[]
+): { rows: QscRow[]; correlation: Record<'service' | 'food' | 'speed' | 'clean', number> } {
+  const shopIds = [...new Set([...reviews.map((r) => r.shop_id), ...answers.map((a) => a.shop_id)])];
+
+  const rows: QscRow[] = shopIds.map((shopId) => {
+    const shopReviews = reviews.filter((r) => r.shop_id === shopId);
+    const shopAnswers = answers.filter((a) => a.shop_id === shopId);
+    const good = shopReviews.filter((r) => r.is_good).length;
+
+    return {
+      shop_id: shopId,
+      reviews: shopReviews.length,
+      good_rate:
+        shopReviews.length === 0 ? 0 : Math.round((good / shopReviews.length) * 1000) / 10,
+      service: to100(shopAnswers.map((a) => a.service_score)),
+      food: to100(shopAnswers.map((a) => a.food_score)),
+      speed: to100(shopAnswers.map((a) => a.speed_score)),
+      clean: to100(shopAnswers.map((a) => a.clean_score)),
+    };
+  });
+
+  const pick = (key: 'service' | 'food' | 'speed' | 'clean') =>
+    pearson(
+      rows.map((row) => row.good_rate),
+      rows.map((row) => row[key])
+    );
+
+  return {
+    rows,
+    correlation: {
+      service: pick('service'),
+      food: pick('food'),
+      speed: pick('speed'),
+      clean: pick('clean'),
+    },
+  };
+}
+
+/** 相関係数。店舗数が少ないと当てにならないので、画面側で件数も出す */
+function pearson(xs: number[], ys: number[]): number {
+  const n = xs.length;
+  if (n < 2) return 0;
+
+  const meanX = xs.reduce((sum, v) => sum + v, 0) / n;
+  const meanY = ys.reduce((sum, v) => sum + v, 0) / n;
+
+  let top = 0;
+  let sx = 0;
+  let sy = 0;
+  for (let i = 0; i < n; i += 1) {
+    const dx = xs[i] - meanX;
+    const dy = ys[i] - meanY;
+    top += dx * dy;
+    sx += dx * dx;
+    sy += dy * dy;
+  }
+
+  if (sx === 0 || sy === 0) return 0;
+  return Math.round((top / Math.sqrt(sx * sy)) * 100) / 100;
+}

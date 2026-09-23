@@ -9,6 +9,7 @@ import type {
   OrderItemRecord,
   PaymentRecord,
   TableSession,
+  TerminalDeposit,
   TerminalPayment,
 } from './types';
 
@@ -474,6 +475,40 @@ export async function getTerminalPayments(shopId: string): Promise<TerminalPayme
     .eq('shop_id', shopId)
     .order('occurred_at', { ascending: false })
     .limit(300);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as TerminalPayment[];
+}
+
+/** 入金履歴（§5.24）。法人単位でまとめて届く */
+export async function getTerminalDeposits(corporationId: string): Promise<TerminalDeposit[]> {
+  if (isDemoMode()) {
+    return clone(db().terminalDeposits.filter((d) => d.corporation_id === corporationId));
+  }
+
+  const { data, error } = await supabaseAdmin()
+    .from('terminal_deposits')
+    .select('*')
+    .eq('corporation_id', corporationId)
+    .order('requested_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as TerminalDeposit[];
+}
+
+/** モバイル決済取引 CSV（§5.28）。複数店舗ぶんまとめて読む */
+export async function getTerminalPaymentsForShops(shopIds: string[]): Promise<TerminalPayment[]> {
+  if (isDemoMode()) {
+    return clone(db().terminalPayments.filter((p) => shopIds.includes(p.shop_id))).sort((a, b) =>
+      a.occurred_at < b.occurred_at ? 1 : -1
+    );
+  }
+
+  const { data, error } = await supabaseAdmin()
+    .from('terminal_payments')
+    .select('*')
+    .in('shop_id', shopIds)
+    .order('occurred_at', { ascending: false });
 
   if (error) throw new Error(error.message);
   return (data ?? []) as TerminalPayment[];

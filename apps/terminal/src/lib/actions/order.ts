@@ -254,7 +254,13 @@ export async function checkout(
   discount: number,
   received: number,
   note?: string,
-  options: { itemIds?: string[] | null; splitCount?: number; splitIndex?: number } = {}
+  options: {
+    itemIds?: string[] | null;
+    splitCount?: number;
+    splitIndex?: number;
+    /** 支払方法マスターの行 ID（§5.10）。選ばれていれば会計に残す */
+    paymentMethodId?: string | null;
+  } = {}
 ): Promise<ActionResult> {
   try {
     const storeId = await requireStoreId();
@@ -272,6 +278,7 @@ export async function checkout(
         itemIds,
         splitCount,
         splitIndex,
+        paymentMethodId: options.paymentMethodId ?? null,
       });
     } else {
       const { data, error } = await supabaseAdmin().rpc('checkout_payment', {
@@ -283,6 +290,7 @@ export async function checkout(
         p_item_ids: itemIds,
         p_split_count: splitCount,
         p_split_index: splitIndex,
+        p_payment_method_id: options.paymentMethodId ?? null,
       });
       if (error) throw error;
       paymentId = data as string;
