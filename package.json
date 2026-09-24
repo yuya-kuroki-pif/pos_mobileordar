@@ -4,7 +4,8 @@
   "private": true,
   "description": "飲食店向け POS / モバイルオーダー（店舗端末）と管理ダッシュボード",
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=dashboard",
